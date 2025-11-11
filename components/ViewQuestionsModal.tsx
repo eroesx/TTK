@@ -1,13 +1,16 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import type { ViewQuestionsModalProps, Question } from '../types';
 import EditIcon from './icons/EditIcon';
 import TrashIcon from './icons/TrashIcon';
 import EditQuestionModal from './EditQuestionModal';
 import DownloadIcon from './icons/DownloadIcon';
 import UploadIcon from './icons/UploadIcon';
+import SearchIcon from './icons/SearchIcon';
+import AddIcon from './icons/AddIcon';
 
-const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose, onEditQuestion, onDeleteQuestion, onAddBulkQuestions }) => {
+const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose, onEditQuestion, onDeleteQuestion, onAddBulkQuestions, onOpenAddQuestionModal }) => {
   const [questionToEdit, setQuestionToEdit] = useState<Question | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDelete = (questionId: number) => {
@@ -115,6 +118,21 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
     reader.readAsText(file);
   };
 
+  const filteredQuestions = useMemo(() => {
+    return topic.questions.filter(q => {
+      const term = searchTerm.toLowerCase();
+      if (!term) return true;
+      const questionTextMatch = q.questionText.toLowerCase().includes(term);
+      const optionsMatch = q.options.some(opt => opt.toLowerCase().includes(term));
+      return questionTextMatch || optionsMatch;
+    });
+  }, [topic.questions, searchTerm]);
+
+  const handleAddNewQuestionClick = () => {
+    onOpenAddQuestionModal(topic);
+    onClose();
+  };
+
   return (
     <>
       <div
@@ -157,10 +175,24 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
             className="hidden"
           />
 
+          <div className="relative mb-4 shrink-0">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <SearchIcon className="h-5 w-5 text-slate-400" />
+            </div>
+            <input
+                type="text"
+                placeholder="Sorular içinde ara..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-md py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
+                aria-label="Soruları filtrele"
+            />
+          </div>
+
           <div className="overflow-y-auto pr-4 -mr-4">
-              {topic.questions.length > 0 ? (
+              {filteredQuestions.length > 0 ? (
                   <ul className="space-y-6">
-                      {topic.questions.map((question, qIndex) => (
+                      {filteredQuestions.map((question) => (
                           <li key={question.id} className="bg-slate-900/50 p-4 rounded-lg border border-slate-700 relative group">
                               <div className="absolute top-2 right-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                   <button onClick={() => setQuestionToEdit(question)} title="Soruyu Düzenle" className="p-1.5 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white">
@@ -170,7 +202,7 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
                                       <TrashIcon />
                                   </button>
                               </div>
-                              <p className="font-semibold text-white mb-3 pr-20">{qIndex + 1}. {question.questionText}</p>
+                              <p className="font-semibold text-white mb-3 pr-20">{topic.questions.findIndex(q => q.id === question.id) + 1}. {question.questionText}</p>
                               <ul className="space-y-2">
                                   {question.options.map((option, oIndex) => (
                                       <li
@@ -189,9 +221,19 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
                       ))}
                   </ul>
               ) : (
-                  <p className="text-center text-slate-400 py-8">Bu konu için henüz soru eklenmemiş.</p>
+                  <p className="text-center text-slate-400 py-8">
+                    {topic.questions.length > 0 ? `"${searchTerm}" ile eşleşen soru bulunamadı.` : 'Bu konu için henüz soru eklenmemiş.'}
+                  </p>
               )}
           </div>
+          <button
+            onClick={handleAddNewQuestionClick}
+            title="Yeni Soru Ekle"
+            aria-label="Yeni Soru Ekle"
+            className="absolute bottom-8 right-8 bg-cyan-600 hover:bg-cyan-500 text-white rounded-full p-4 shadow-lg transition-transform transform hover:scale-110 focus:outline-none focus:ring-4 focus:ring-cyan-500/50 z-10"
+          >
+              <AddIcon className="h-8 w-8" />
+          </button>
         </div>
       </div>
       {questionToEdit && (

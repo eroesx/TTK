@@ -617,6 +617,7 @@ const App: React.FC = () => {
             onEditQuestion={(updatedQuestion) => handleEditQuestion(topicToViewQuestions.id, updatedQuestion)}
             onDeleteQuestion={(questionId) => handleDeleteQuestion(topicToViewQuestions.id, questionId)}
             onAddBulkQuestions={handleAddNewBulkQuestions}
+            onOpenAddQuestionModal={handleOpenAddQuestionModal}
         />
       )}
       {isEditTopicModalOpen && topicToEdit && (
