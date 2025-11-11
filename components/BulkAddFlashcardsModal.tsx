@@ -18,23 +18,34 @@ const BulkAddFlashcardsModal: React.FC<BulkAddFlashcardsModalProps> = ({ topic, 
       return;
     }
 
-    const lines = bulkText.split('\n').filter(line => line.trim() !== '');
+    const cardBlocks = bulkText.trim().split(/\n\s*\n/); // Split by one or more empty lines
     const newCards: Array<Omit<Flashcard, 'id'>> = [];
 
-    for (const line of lines) {
-      const parts = line.split(';');
-      if (parts.length !== 2 || !parts[0].trim() || !parts[1].trim()) {
-        setError(`Hatalı formatlı satır: "${line}". Her satır "Soru;Cevap" formatında olmalıdır.`);
-        return;
-      }
-      newCards.push({ front: parts[0].trim(), back: parts[1].trim() });
-    }
+    for (const block of cardBlocks) {
+        if (!block.trim()) continue;
 
+        const firstSemicolonIndex = block.indexOf(';');
+        if (firstSemicolonIndex === -1) {
+            setError(`Hatalı formatlı kart: "${block.split('\n')[0]}...". Her kart "Soru;Cevap" formatında olmalıdır ve soru ile cevap ';' ile ayrılmalıdır.`);
+            return;
+        }
+
+        const front = block.substring(0, firstSemicolonIndex).trim();
+        const back = block.substring(firstSemicolonIndex + 1).trim();
+
+        if (!front || !back) {
+            setError(`Hatalı formatlı kart: "${block.split('\n')[0]}...". Soru ve cevap alanları boş olamaz.`);
+            return;
+        }
+
+        newCards.push({ front, back });
+    }
+    
     if (newCards.length > 0) {
       onSave(topic.id, newCards);
       onClose();
     } else {
-      setError('Eklenecek geçerli kart bulunamadı.');
+      setError('Eklenecek geçerli kart bulunamadı. Lütfen formatı kontrol edin.');
     }
   };
 
@@ -45,14 +56,30 @@ const BulkAddFlashcardsModal: React.FC<BulkAddFlashcardsModalProps> = ({ topic, 
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
         <h2 className="text-2xl font-bold text-cyan-400 mb-4">Toplu Bilgi Kartı Ekle</h2>
-        <p className="text-slate-400 mb-4">Her satıra bir kart gelecek şekilde, soruyu ve cevabı noktalı virgül (;) ile ayırarak girin.</p>
-        <p className="text-slate-500 mb-6 text-sm bg-slate-900 p-2 rounded-md">Örnek:<br/>Türkiye'nin başkenti neresidir?;Ankara<br/>2+2 kaçtır?;4</p>
+        <p className="text-slate-400 mb-2">Kartları "Soru;Cevap" formatında girin. Cevaplar birden fazla satır içerebilir.</p>
+        <p className="text-slate-400 mb-4">Yeni bir karta geçmek için <strong className="text-slate-300">boş bir satır</strong> bırakın.</p>
+        
+        <div className="text-slate-500 mb-6 text-sm bg-slate-900 p-3 rounded-md">
+            <p className="font-semibold text-slate-400">Örnek:</p>
+            <pre className="mt-2 whitespace-pre-wrap">
+{`Türkiye'nin başkenti neresidir?;Ankara
+
+Temel İlkeler (SIKALİ) nelerdir?;
+- Sınıflandırma
+- Kariyer
+- Liyakat`}
+            </pre>
+        </div>
+        
         <textarea
           value={bulkText}
           onChange={(e) => setBulkText(e.target.value)}
           rows={10}
-          className="w-full bg-slate-900 border border-slate-700 rounded-md p-3 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
-          placeholder="Kartları buraya yapıştırın..."
+          className="w-full bg-slate-900 border border-slate-700 rounded-md p-3 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition font-mono text-sm"
+          placeholder={`Soru;Cevap satırı 1
+Cevap satırı 2
+
+Yeni Soru;Yeni Cevap...`}
         />
         {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
         <div className="flex justify-end gap-4 pt-6">

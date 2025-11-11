@@ -187,7 +187,7 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     return (
       <div className="relative text-center w-full animate-fade-in">
         <button onClick={onBack} aria-label="Ana menüye geri dön" className="absolute top-0 left-0 text-slate-300 hover:text-white transition-colors duration-200 z-10 p-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -295,11 +295,11 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           <div className="flashcard-container">
             <div className={`flashcard ${isFlipped ? 'flipped' : ''}`} onClick={() => setIsFlipped(!isFlipped)}>
               <div className={`flashcard-front ${cardColors[0]}`}>
-                <p className="text-xl font-semibold px-4">{currentCard.front}</p>
+                <p className="text-xl font-semibold px-4 whitespace-pre-wrap">{currentCard.front}</p>
               </div>
               <div className={`flashcard-back ${cardColors[0]}`}>
                 <p className="text-lg font-medium text-slate-400">{currentCard.front}</p>
-                <p className="text-3xl font-bold">{currentCard.back}</p>
+                <p className="text-xl whitespace-pre-wrap text-left">{currentCard.back}</p>
               </div>
             </div>
           </div>
