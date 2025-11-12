@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import type { SettingsViewProps, Question } from '../types';
 import EditableQuestionForm from './EditableQuestionForm';
+import DownloadIcon from './icons/DownloadIcon';
+import UploadIcon from './icons/UploadIcon';
 
 const SettingsView: React.FC<SettingsViewProps> = ({ 
   onBack, 
@@ -10,7 +12,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onAddNewQuestion,
   isMobileLayout,
   onToggleMobileLayout,
-  onResetData
+  onResetData,
+  onBackupData,
+  onRestoreData,
 }) => {
   const [selectedTopicId, setSelectedTopicId] = useState<string>(topics[0]?.id || '');
   
@@ -19,6 +23,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [newCorrectAnswerIndex, setNewCorrectAnswerIndex] = useState<number | null>(null);
   const [addError, setAddError] = useState('');
   const [addSuccess, setAddSuccess] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedTopic = topics.find(t => t.id === selectedTopicId);
   const questions = selectedTopic?.questions || [];
@@ -67,6 +72,21 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setAddSuccess(''), 4000);
   };
 
+  const handleRestoreClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (file) {
+          onRestoreData(file);
+      }
+      if(event.target) {
+          event.target.value = '';
+      }
+  };
+
+
   return (
     <div className="relative bg-slate-800/50 p-6 md:p-8 rounded-2xl shadow-2xl w-full max-w-4xl mx-auto animate-fade-in">
       <button onClick={onBack} aria-label="Ana menüye geri dön" className="absolute top-6 left-6 text-slate-400 hover:text-white transition-colors duration-200 z-10">
@@ -99,10 +119,48 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       {/* --- Data Management Section --- */}
       <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700 mb-8">
         <h3 className="text-xl font-bold text-white mb-4">Veri Yönetimi</h3>
-        <div className="flex items-center justify-between gap-4">
+        
+        <div className="flex items-center justify-between gap-4 py-4 border-b border-slate-800">
+          <div>
+            <p className="text-slate-300 font-medium">Tüm Verileri Yedekle</p>
+            <p className="text-sm text-slate-500 font-normal mt-1">Tüm konuları, soruları, bilgi kartlarını ve özetleri tek bir dosyaya indirir.</p>
+          </div>
+          <button 
+            onClick={onBackupData}
+            className="flex items-center gap-2 px-4 py-2 rounded-md bg-sky-600 text-white font-semibold hover:bg-sky-500 transition-colors shrink-0"
+            aria-label="Tüm verileri yedekle"
+          >
+            <DownloadIcon className="h-5 w-5" />
+            Yedekle
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 py-4 border-b border-slate-800">
+          <div>
+            <p className="text-slate-300 font-medium">Yedekten Geri Yükle</p>
+            <p className="text-sm text-slate-500 font-normal mt-1">Daha önce indirdiğiniz yedek dosyasından tüm verileri geri yükler. Mevcut verileriniz silinir.</p>
+          </div>
+          <button 
+            onClick={handleRestoreClick}
+            className="flex items-center gap-2 px-4 py-2 rounded-md bg-amber-600 text-white font-semibold hover:bg-amber-500 transition-colors shrink-0"
+            aria-label="Yedekten geri yükle"
+          >
+            <UploadIcon className="h-5 w-5" />
+            Geri Yükle
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".json,application/json"
+            className="hidden"
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 pt-4">
           <div>
             <p className="text-slate-300 font-medium">Uygulama Verilerini Sıfırla</p>
-            <p className="text-sm text-slate-500 font-normal mt-1">Tüm eklenen konuları, soruları, özetleri ve diğer değişiklikleri silerek uygulamayı başlangıç durumuna döndürür.</p>
+            <p className="text-sm text-slate-500 font-normal mt-1">Tüm eklenen konuları, soruları ve diğer değişiklikleri silerek uygulamayı başlangıç durumuna döndürür.</p>
           </div>
           <button 
             onClick={onResetData}

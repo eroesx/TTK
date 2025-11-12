@@ -90,6 +90,8 @@ export interface FlashcardsViewProps extends MobileLayoutProps {
     onToggleFavorite: (topicId: string) => void;
     availableIcons: { name: string, component: React.ReactNode }[];
     onOpenBulkAddModal: (topic: Topic) => void;
+    onOpenBulkUpdateModal: (topic: Topic) => void;
+    onOpenManageCardsModal: (topic: Topic) => void;
 }
 
 export interface SummariesViewProps extends MobileLayoutProps {
@@ -113,4 +115,6 @@ export interface SettingsViewProps {
   isMobileLayout: boolean;
   onToggleMobileLayout: () => void;
   onResetData: () => void;
+  onBackupData: () => void;
+  onRestoreData: (file: File) => void;
 }

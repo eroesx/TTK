@@ -174,7 +174,7 @@ const SummariesView: React.FC<SummariesViewProps> = ({
                     title={topic.isFavorite ? "Favorilerden Kaldır" : "Favorilere Ekle"}
                     className="p-1.5 bg-slate-800/60 rounded-full text-slate-400 hover:text-amber-400 transition-colors"
                   >
-                    <StarIcon isFavorite={topic.isFavorite} />
+                    <StarIcon />
                   </button>
                 </div>
 

@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { FlashcardsViewProps, Flashcard } from '../types';
-import { Topic } from '../types';
-import IncorrectIcon from './icons/IncorrectIcon';
-import CorrectIcon from './icons/CorrectIcon';
+import type { FlashcardsViewProps, Flashcard, Topic } from '../types';
 import ThreeDotsIcon from './icons/ThreeDotsIcon';
-import EditFlashcardModal from './EditFlashcardModal';
 import AddIcon from './icons/AddIcon';
 import EditIcon from './icons/EditIcon';
 import TrashIcon from './icons/TrashIcon';
 import StarIcon from './icons/StarIcon';
+import IncorrectIcon from './icons/IncorrectIcon';
+import CorrectIcon from './icons/CorrectIcon';
+import EditFlashcardModal from './EditFlashcardModal';
 import ChevronLeftIcon from './icons/ChevronLeftIcon';
 import ChevronRightIcon from './icons/ChevronRightIcon';
 
@@ -55,7 +54,8 @@ const cardStyles = `
 
   .flashcard-back {
     transform: rotateY(180deg);
-    justify-content: space-around;
+    justify-content: space-between;
+    align-items: center;
   }
 `;
 
@@ -80,7 +80,9 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   onDeleteTopic,
   onToggleFavorite,
   availableIcons,
-  onOpenBulkAddModal
+  onOpenBulkAddModal,
+  onOpenBulkUpdateModal,
+  onOpenManageCardsModal,
 }) => {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [deck, setDeck] = useState<Flashcard[]>([]);
@@ -97,20 +99,20 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     const styleElement = document.createElement('style');
     styleElement.innerHTML = cardStyles;
     document.head.appendChild(styleElement);
-    // FIX: The cleanup function for useEffect must return `void` and not a value.
-    // An arrow function with a block body `{}` will implicitly return undefined, which is valid.
     return () => {
-      document.head.removeChild(styleElement);
+       if (styleElement.parentNode) {
+        styleElement.parentNode.removeChild(styleElement);
+      }
     };
   }, []);
 
   useEffect(() => {
     if (selectedTopic) {
-        // Find the latest version of the topic from the main topics array
         const currentTopicState = topics.find(t => t.id === selectedTopic.id);
         if (currentTopicState) {
+            const shuffledCards = [...currentTopicState.flashcards].sort(() => Math.random() - 0.5);
             setDeck(currentTopicState.flashcards);
-            setStudyDeck(currentTopicState.flashcards);
+            setStudyDeck(shuffledCards);
             setBrowseIndex(0);
         }
         setIsFlipped(false);
@@ -137,8 +139,6 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     setStudyDeck(prev => {
         const topCard = prev[0];
         const rest = prev.slice(1);
-        // 'left' is 'Bilmiyorum' -> move to back
-        // 'right' is 'Biliyorum' -> remove from deck for this session
         return direction === 'left' ? [...rest, topCard] : rest;
     });
     setIsFlipped(false);
@@ -147,13 +147,15 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   const handleBrowse = (direction: 'next' | 'prev') => {
     if(deck.length === 0) return;
     setIsFlipped(false);
-    setBrowseIndex(prev => {
-        if (direction === 'next') {
-            return (prev + 1) % deck.length;
-        } else {
-            return (prev - 1 + deck.length) % deck.length;
-        }
-    });
+    setTimeout(() => {
+        setBrowseIndex(prev => {
+            if (direction === 'next') {
+                return (prev + 1) % deck.length;
+            } else {
+                return (prev - 1 + deck.length) % deck.length;
+            }
+        });
+    }, 50); // Small delay to allow flip animation to reset
   };
   
   const currentCard = studyMode ? studyDeck[0] : deck[browseIndex];
@@ -173,7 +175,6 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
       setIsEditModalOpen(false);
     }
   };
-
 
   const sortedTopics = useMemo(() => {
     return [...topics].sort((a, b) => {
@@ -271,8 +272,10 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
                     <ThreeDotsIcon />
                 </button>
                 {isMenuOpen && (
-                <div className="absolute top-full right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-md shadow-lg z-20 animate-fade-in">
+                <div className="absolute top-full right-0 mt-2 w-52 bg-slate-800 border border-slate-700 rounded-md shadow-lg z-20 animate-fade-in">
                     <button onClick={() => { onOpenBulkAddModal(selectedTopic); setIsMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded-t-md">Toplu Kart Ekle</button>
+                    <button onClick={() => { onOpenBulkUpdateModal(selectedTopic); setIsMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700">Toplu Kart Güncelle</button>
+                    <button onClick={() => { onOpenManageCardsModal(selectedTopic); setIsMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700">Tüm Kartları Yönet</button>
                     <button onClick={() => { setIsEditModalOpen(true); setIsMenuOpen(false); }} disabled={!currentCard} className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed">Kartı Düzenle</button>
                     <button onClick={handleDelete} disabled={!currentCard} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 rounded-b-md disabled:text-slate-500 disabled:cursor-not-allowed">Kartı Sil</button>
                 </div>
@@ -290,23 +293,29 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           <label htmlFor="study-mode-toggle" className="text-slate-300 font-medium cursor-pointer text-sm">Çalışma Modu</label>
       </div>
 
-      <div className="w-full max-w-sm h-96 flex-grow flex items-center justify-center">
+      <div className="w-full max-w-lg h-96 flex-grow flex items-center justify-center">
         {currentCard ? (
           <div className="flashcard-container">
             <div className={`flashcard ${isFlipped ? 'flipped' : ''}`} onClick={() => setIsFlipped(!isFlipped)}>
               <div className={`flashcard-front ${cardColors[0]}`}>
-                <p className="text-xl font-semibold px-4 whitespace-pre-wrap">{currentCard.front}</p>
+                <div className="text-xl font-semibold px-4 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: currentCard.front }} />
               </div>
               <div className={`flashcard-back ${cardColors[0]}`}>
-                <p className="text-lg font-medium text-slate-400">{currentCard.front}</p>
-                <p className="text-xl whitespace-pre-wrap text-left">{currentCard.back}</p>
+                 <div className="text-lg font-medium text-slate-400 self-start w-full text-left whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: currentCard.front }} />
+                 <div className="text-3xl font-bold whitespace-pre-wrap text-left w-full" dangerouslySetInnerHTML={{ __html: currentCard.back }} />
+                 <div />
               </div>
             </div>
           </div>
         ) : (
-          <div className="text-center text-white p-8 bg-white/10 rounded-xl">
+          <div className="text-center text-white p-8 bg-white/10 rounded-2xl shadow-lg">
             <h3 className="text-3xl font-bold mb-2">Harika iş!</h3>
-            <p className="text-slate-300">{studyMode ? 'Bu konudaki tüm kartları tamamladın.' : 'Bu konuda hiç kart yok.'}</p>
+            <p className="text-slate-300">{deck.length > 0 ? 'Bu konudaki tüm kartları tamamladın.' : 'Bu konuda hiç kart yok.'}</p>
+             {deck.length === 0 && (
+                <button onClick={() => onOpenBulkAddModal(selectedTopic)} className="mt-4 px-4 py-2 text-sm rounded-md bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition-colors">
+                    Toplu Kart Ekle
+                </button>
+            )}
           </div>
         )}
       </div>
@@ -332,6 +341,15 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           </>
         )}
       </div>
+      
+      <button
+          onClick={() => onOpenBulkAddModal(selectedTopic)}
+          title="Toplu Kart Ekle"
+          aria-label="Toplu Bilgi Kartı Ekle"
+          className="absolute bottom-6 right-6 bg-violet-600 hover:bg-violet-500 text-white rounded-full p-4 shadow-lg transition-transform transform hover:scale-110 focus:outline-none focus:ring-4 focus:ring-violet-500/50 z-10"
+      >
+          <AddIcon className="h-8 w-8" />
+      </button>
 
       {isEditModalOpen && currentCard && (
         <EditFlashcardModal card={currentCard} onClose={() => setIsEditModalOpen(false)} onSave={handleSaveEdit} />

@@ -13,6 +13,8 @@ import ViewQuestionsModal from './components/ViewQuestionsModal';
 import EditTopicModal from './components/EditTopicModal';
 import SaveStatusToast from './components/SaveStatusToast';
 import BulkAddFlashcardsModal from './components/BulkAddFlashcardsModal';
+import BulkUpdateFlashcardsModal from './components/BulkUpdateFlashcardsModal';
+import ManageFlashcardsModal from './components/ManageFlashcardsModal';
 
 type View = 'home' | 'topicSelection' | 'quiz' | 'results' | 'summaries' | 'bilgiKartlari' | 'settings';
 
@@ -121,11 +123,15 @@ const App: React.FC = () => {
   const [isAddQuestionModalOpen, setIsAddQuestionModalOpen] = useState(false);
   const [topicToAddTo, setTopicToAddTo] = useState<Topic | null>(null);
   const [isViewQuestionsModalOpen, setIsViewQuestionsModalOpen] = useState(false);
-  const [topicToViewQuestions, setTopicToViewQuestions] = useState<Topic | null>(null);
+  const [topicToViewQuestionsId, setTopicToViewQuestionsId] = useState<string | null>(null);
   const [isEditTopicModalOpen, setIsEditTopicModalOpen] = useState(false);
   const [topicToEdit, setTopicToEdit] = useState<Topic | null>(null);
   const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
   const [topicToBulkAddTo, setTopicToBulkAddTo] = useState<Topic | null>(null);
+  const [isBulkUpdateModalOpen, setIsBulkUpdateModalOpen] = useState(false);
+  const [topicToBulkUpdate, setTopicToBulkUpdate] = useState<Topic | null>(null);
+  const [isManageCardsModalOpen, setIsManageCardsModalOpen] = useState(false);
+  const [topicToManageCardsId, setTopicToManageCardsId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   
   const saveTopics = useCallback((newTopics: Topic[]) => {
@@ -300,12 +306,12 @@ const App: React.FC = () => {
   }, [saveTopics]);
 
   const handleOpenViewQuestionsModal = useCallback((topic: Topic) => {
-    setTopicToViewQuestions(topic);
+    setTopicToViewQuestionsId(topic.id);
     setIsViewQuestionsModalOpen(true);
   }, []);
 
   const handleCloseViewQuestionsModal = useCallback(() => {
-    setTopicToViewQuestions(null);
+    setTopicToViewQuestionsId(null);
     setIsViewQuestionsModalOpen(false);
   }, []);
 
@@ -392,6 +398,26 @@ const App: React.FC = () => {
     });
   }, [saveTopics]);
   
+  const handleAddNewFlashcard = useCallback((topicId: string, newCardData: Omit<Flashcard, 'id'>) => {
+    setTopics(currentTopics => {
+      const newTopics = currentTopics.map(topic => {
+        if (topic.id === topicId) {
+          const existingCards = topic.flashcards;
+          const lastId = existingCards.length > 0 ? Math.max(...existingCards.map(c => c.id)) : 0;
+          const newCardWithId: Flashcard = {
+            ...newCardData,
+            id: lastId + 1,
+          };
+          const finalFlashcards = [...existingCards, newCardWithId];
+          return { ...topic, flashcards: finalFlashcards };
+        }
+        return topic;
+      });
+      saveTopics(newTopics);
+      return newTopics;
+    });
+  }, [saveTopics]);
+
   const handleEditFlashcard = useCallback((topicId: string, cardId: number, updatedCard: Omit<Flashcard, 'id'>) => {
       setTopics(currentTopics => {
           const newTopics = currentTopics.map(topic => {
@@ -452,6 +478,44 @@ const App: React.FC = () => {
     });
   }, [saveTopics]);
   
+  const handleOpenBulkUpdateModal = useCallback((topic: Topic) => {
+    setTopicToBulkUpdate(topic);
+    setIsBulkUpdateModalOpen(true);
+  }, []);
+
+  const handleCloseBulkUpdateModal = useCallback(() => {
+    setTopicToBulkUpdate(null);
+    setIsBulkUpdateModalOpen(false);
+  }, []);
+
+  const handleBulkUpdateFlashcards = useCallback((topicId: string, newCards: Array<Omit<Flashcard, 'id'>>) => {
+    setTopics(currentTopics => {
+      const newTopics = currentTopics.map(topic => {
+        if (topic.id === topicId) {
+          // Replace all flashcards with new ones, assigning new IDs
+          const newFlashcardsWithIds = newCards.map((card, index) => ({
+            ...card,
+            id: index + 1, // Resetting IDs
+          }));
+          return { ...topic, flashcards: newFlashcardsWithIds };
+        }
+        return topic;
+      });
+      saveTopics(newTopics);
+      return newTopics;
+    });
+  }, [saveTopics]);
+  
+  const handleOpenManageCardsModal = useCallback((topic: Topic) => {
+    setTopicToManageCardsId(topic.id);
+    setIsManageCardsModalOpen(true);
+  }, []);
+
+  const handleCloseManageCardsModal = useCallback(() => {
+    setTopicToManageCardsId(null);
+    setIsManageCardsModalOpen(false);
+  }, []);
+
   const handleResetData = useCallback(() => {
     if (window.confirm("Tüm değişiklikleri sıfırlamak ve başlangıç verilerine dönmek istediğinizden emin misiniz? Eklediğiniz tüm konular, sorular ve diğer veriler silinecektir.")) {
       try {
@@ -495,6 +559,81 @@ const App: React.FC = () => {
       }
     }
   }, [topics, saveTopics, initialTopics]);
+
+  const handleBackupData = useCallback(() => {
+      try {
+          const scoresHistory = localStorage.getItem('quizScoresHistory') || '{}';
+          const dataToBackup = {
+              appDataVersion: DATA_VERSION,
+              appTopics: topics,
+              quizScoresHistory: JSON.parse(scoresHistory)
+          };
+          const jsonString = JSON.stringify(dataToBackup, null, 2);
+          const blob = new Blob([jsonString], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          const timestamp = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '');
+          link.download = `ttk_sinav_yedek_${timestamp}.json`;
+          link.href = url;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+      } catch (error) {
+          console.error("Yedekleme sırasında hata:", error);
+          alert("Veri yedeklenirken bir hata oluştu.");
+      }
+  }, [topics]);
+
+  const handleRestoreData = useCallback((file: File) => {
+      if (!window.confirm("Bu işlem mevcut tüm verilerinizi (konular, sorular, kartlar, özetler, skorlar) yedek dosyasındaki verilerle değiştirecektir. Devam etmek istediğinizden emin misiniz?")) {
+          return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          try {
+              const content = e.target?.result;
+              if (typeof content !== 'string') throw new Error("Dosya içeriği okunamadı.");
+              
+              const parsedData = JSON.parse(content);
+
+              if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.appTopics)) {
+                  throw new Error("Yedek dosyası geçersiz veya bozuk formatta.");
+              }
+              
+              const restoredTopics: Topic[] = parsedData.appTopics;
+              setTopics(restoredTopics);
+              saveTopics(restoredTopics);
+
+              if (parsedData.quizScoresHistory && typeof parsedData.quizScoresHistory === 'object') {
+                  localStorage.setItem('quizScoresHistory', JSON.stringify(parsedData.quizScoresHistory));
+              } else {
+                  localStorage.removeItem('quizScoresHistory');
+              }
+
+              if (parsedData.appDataVersion && typeof parsedData.appDataVersion === 'number') {
+                   localStorage.setItem('appDataVersion', String(parsedData.appDataVersion));
+              } else {
+                   localStorage.setItem('appDataVersion', String(DATA_VERSION));
+              }
+
+              alert("Veriler başarıyla geri yüklendi. Değişikliklerin tamamen uygulanması için sayfa yenilenecektir.");
+              window.location.reload();
+
+          } catch (error) {
+               if (error instanceof Error) {
+                  alert(`Geri yükleme hatası: ${error.message}`);
+              } else {
+                  alert("Bilinmeyen bir hata oluştu.");
+              }
+          }
+      };
+      reader.onerror = () => {
+          alert("Dosya okunurken bir hata oluştu.");
+      };
+      reader.readAsText(file);
+  }, [saveTopics]);
 
   if (isLoading) {
     return (
@@ -568,6 +707,8 @@ const App: React.FC = () => {
             onToggleFavorite={handleToggleFavorite}
             availableIcons={availableIcons}
             onOpenBulkAddModal={handleOpenBulkAddModal}
+            onOpenBulkUpdateModal={handleOpenBulkUpdateModal}
+            onOpenManageCardsModal={handleOpenManageCardsModal}
         />;
       case 'settings':
         return <SettingsView 
@@ -579,6 +720,8 @@ const App: React.FC = () => {
             isMobileLayout={isMobileLayout}
             onToggleMobileLayout={handleToggleMobileLayout}
             onResetData={handleResetData}
+            onBackupData={handleBackupData}
+            onRestoreData={handleRestoreData}
         />;
       case 'home':
       default:
@@ -596,6 +739,13 @@ const App: React.FC = () => {
     ? 'bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900' 
     : 'bg-slate-900';
 
+  const topicToViewQuestions = isViewQuestionsModalOpen && topicToViewQuestionsId
+    ? topics.find(t => t.id === topicToViewQuestionsId)
+    : null;
+    
+  const topicToManageCards = isManageCardsModalOpen && topicToManageCardsId
+    ? topics.find(t => t.id === topicToManageCardsId)
+    : null;
 
   return (
     <div className={`min-h-screen ${backgroundClass} flex flex-col items-center justify-center p-4 transition-colors duration-500`}>
@@ -610,7 +760,7 @@ const App: React.FC = () => {
           onAddQuestion={handleAddNewQuestion}
         />
       )}
-      {isViewQuestionsModalOpen && topicToViewQuestions && (
+      {topicToViewQuestions && (
         <ViewQuestionsModal
             topic={topicToViewQuestions}
             onClose={handleCloseViewQuestionsModal}
@@ -634,6 +784,23 @@ const App: React.FC = () => {
             topic={topicToBulkAddTo}
             onClose={handleCloseBulkAddModal}
             onSave={handleBulkAddFlashcards}
+        />
+      )}
+      {isBulkUpdateModalOpen && topicToBulkUpdate && (
+        <BulkUpdateFlashcardsModal
+            topic={topicToBulkUpdate}
+            onClose={handleCloseBulkUpdateModal}
+            onSave={handleBulkUpdateFlashcards}
+        />
+      )}
+      {topicToManageCards && (
+        <ManageFlashcardsModal
+          topic={topicToManageCards}
+          onClose={handleCloseManageCardsModal}
+          onEditFlashcard={(cardId, updatedCard) => handleEditFlashcard(topicToManageCards.id, cardId, updatedCard)}
+          onDeleteFlashcard={(cardId) => handleDeleteFlashcard(topicToManageCards.id, cardId)}
+          onAddFlashcard={(newCardData) => handleAddNewFlashcard(topicToManageCards.id, newCardData)}
+          onAddBulkFlashcards={handleBulkAddFlashcards}
         />
       )}
     </div>
