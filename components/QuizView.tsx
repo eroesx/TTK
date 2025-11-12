@@ -5,15 +5,29 @@ import TrashIcon from './icons/TrashIcon';
 import CorrectIcon from './icons/CorrectIcon';
 import IncorrectIcon from './icons/IncorrectIcon';
 import EditIcon from './icons/EditIcon';
+import NoteIcon from './icons/NoteIcon';
 import EditQuestionModal from './EditQuestionModal'; // Import the new modal
+import LightbulbIcon from './icons/LightbulbIcon';
 
-const QuizView: React.FC<QuizViewProps> = ({ topic, onQuizComplete, onBack, onBackToHome, onDeleteQuestion, onEditQuestion, isMobileLayout }) => {
+const QuizView: React.FC<QuizViewProps> = ({ 
+  topic, 
+  onQuizComplete, 
+  onBack, 
+  onBackToHome, 
+  onDeleteQuestion, 
+  onEditQuestion, 
+  isMobileLayout,
+  onUpdateQuestionNote
+}) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswerIndex, setSelectedAnswerIndex] = useState<number | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [answerStatus, setAnswerStatus] = useState<'correct' | 'incorrect' | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isNoteVisible, setIsNoteVisible] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [isHintVisible, setIsHintVisible] = useState(false);
   
   const isShuffledQuiz = !!topic.originalId || topic.id.startsWith('shuffled-'); // More robust check
   const currentQuestion = topic.questions[currentQuestionIndex];
@@ -30,10 +44,19 @@ const QuizView: React.FC<QuizViewProps> = ({ topic, onQuizComplete, onBack, onBa
     setSelectedAnswerIndex(null);
     setIsAnswered(false);
     setAnswerStatus(null);
+    setIsNoteVisible(false);
+    setNoteText(currentQuestion?.note || '');
+    setIsHintVisible(false);
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-  }, [currentQuestionIndex]);
+  }, [currentQuestion]);
+
+  useEffect(() => {
+    if (isAnswered && topic.showHints && currentQuestion?.note) {
+        setIsHintVisible(true);
+    }
+  }, [isAnswered, topic.showHints, currentQuestion]);
 
   const proceedToNextStep = () => {
     if (currentQuestionIndex < topic.questions.length - 1) {
@@ -91,6 +114,15 @@ const QuizView: React.FC<QuizViewProps> = ({ topic, onQuizComplete, onBack, onBa
     }
     setIsEditModalOpen(false);
   };
+
+  const handleSaveNote = () => {
+    if (!currentQuestion) return;
+    const originalTopicId = topic.originalId || topic.id;
+    onUpdateQuestionNote(originalTopicId, currentQuestion.id, noteText);
+    setIsNoteVisible(false);
+  };
+
+  const handleToggleHint = () => setIsHintVisible(prev => !prev);
 
   const getButtonClass = (index: number) => {
     if (!isAnswered) {
@@ -159,13 +191,23 @@ const QuizView: React.FC<QuizViewProps> = ({ topic, onQuizComplete, onBack, onBa
                 </div>
             </div>
         )}
-        <p className={`${isMobileLayout ? 'text-lg' : 'text-xl md:text-2xl'} text-white font-medium min-h-[6rem] flex items-center justify-center px-4`}>
+        <p className={`${isMobileLayout ? 'text-lg' : 'text-xl md:text-2xl'} text-white font-medium min-h-[6rem] flex items-center justify-center px-12`}>
           {currentQuestion.questionText}
         </p>
+
+        <button
+            onClick={() => setIsNoteVisible(prev => !prev)}
+            className="absolute top-1/2 -left-2 -translate-y-1/2 p-2 rounded-full text-slate-400 bg-slate-700/80 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200"
+            aria-label="Not Ekle/Düzenle"
+            title="Not Ekle/Düzenle"
+        >
+            <NoteIcon className="h-5 w-5" />
+        </button>
+
         {!isShuffledQuiz && (
             <button
                 onClick={() => setIsEditModalOpen(true)}
-                className="absolute top-1/2 -right-4 -translate-y-1/2 p-2 rounded-full text-slate-400 bg-slate-700/80 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200"
+                className="absolute top-1/2 -right-2 -translate-y-1/2 p-2 rounded-full text-slate-400 bg-slate-700/80 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200"
                 aria-label="Soruyu düzenle"
                 title="Soruyu düzenle"
             >
@@ -173,6 +215,36 @@ const QuizView: React.FC<QuizViewProps> = ({ topic, onQuizComplete, onBack, onBa
             </button>
         )}
       </div>
+
+      {isHintVisible && currentQuestion.note && (
+        <div className="my-6 p-4 bg-amber-900/30 rounded-lg border border-amber-500/50 animate-fade-in flex items-start gap-3">
+          <LightbulbIcon isActive={true} className="h-6 w-6 text-amber-400 shrink-0 mt-1" />
+          <div>
+            <h4 className="font-bold text-amber-300 mb-1">İpucu</h4>
+            <div 
+              className="text-amber-200/90 text-sm prose-dark max-w-none" 
+              dangerouslySetInnerHTML={{ __html: currentQuestion.note }} 
+            />
+          </div>
+        </div>
+      )}
+
+      {isNoteVisible && (
+        <div className="my-6 p-4 bg-slate-900/50 rounded-lg border border-slate-700 animate-fade-in">
+            <label htmlFor="question-note" className="block text-sm font-medium text-slate-300 mb-2">Soruyla İlgili Notlarınız</label>
+            <textarea
+                id="question-note"
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                rows={4}
+                className="w-full bg-slate-800 border border-slate-600 rounded-md p-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
+                placeholder="Bu soruyla ilgili ipuçlarını veya notlarınızı buraya yazın..."
+            />
+            <div className="flex justify-end gap-2 mt-2">
+                <button onClick={handleSaveNote} className="px-4 py-1.5 text-sm rounded-md bg-cyan-600 hover:bg-cyan-500 font-semibold transition-colors">Notu Kaydet</button>
+            </div>
+        </div>
+      )}
 
       <div className={`mt-8 grid ${isMobileLayout ? 'grid-cols-1' : 'md:grid-cols-2'} gap-4`}>
         {currentQuestion.options.map((option, index) => (
@@ -202,17 +274,25 @@ const QuizView: React.FC<QuizViewProps> = ({ topic, onQuizComplete, onBack, onBa
       </div>
       
       <div className="flex justify-between items-center mt-6">
-          {!isShuffledQuiz ? (
-            <button 
-                onClick={handleDelete}
-                className="p-2 text-slate-500 hover:text-red-400 transition-colors"
-                title="Soruyu Sil"
-            >
-                <TrashIcon />
-            </button>
-          ) : (
-            <div></div> // Placeholder to keep layout consistent
-          )}
+          <div className="flex items-center gap-2">
+              {!isShuffledQuiz && (
+                <button 
+                    onClick={handleDelete}
+                    className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                    title="Soruyu Sil"
+                >
+                    <TrashIcon />
+                </button>
+              )}
+              <button
+                onClick={handleToggleHint}
+                className="p-2 text-slate-500 hover:text-amber-400 transition-colors disabled:text-slate-700 disabled:cursor-not-allowed"
+                title={currentQuestion.note ? (isHintVisible ? "İpucunu Gizle" : "İpucu Göster") : "Bu soru için ipucu yok"}
+                disabled={!currentQuestion.note}
+              >
+                <LightbulbIcon isActive={isHintVisible && !!currentQuestion.note} />
+              </button>
+          </div>
           <span className="text-sm font-semibold text-slate-400">
               Soru {currentQuestionIndex + 1}/{topic.questions.length}
           </span>

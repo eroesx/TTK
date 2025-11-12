@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import type { ViewQuestionsModalProps, Question } from '../types';
 import EditIcon from './icons/EditIcon';
 import TrashIcon from './icons/TrashIcon';
+import NoteIcon from './icons/NoteIcon';
 import EditQuestionModal from './EditQuestionModal';
 import DownloadIcon from './icons/DownloadIcon';
 import UploadIcon from './icons/UploadIcon';
@@ -13,6 +14,10 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
   const [searchTerm, setSearchTerm] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // State for inline note editing
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [currentNote, setCurrentNote] = useState('');
+
   const handleDelete = (questionId: number) => {
     if (window.confirm("Bu soruyu kalıcı olarak silmek istediğinizden emin misiniz?")) {
         onDeleteQuestion(questionId);
@@ -23,6 +28,22 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
     onEditQuestion(updatedQuestion);
     setQuestionToEdit(null);
   };
+
+  const handleEditNoteClick = (question: Question) => {
+    if (editingNoteId === question.id) {
+        setEditingNoteId(null); // Toggle off if already editing
+    } else {
+        setEditingNoteId(question.id);
+        setCurrentNote(question.note || '');
+    }
+  };
+
+  const handleSaveNote = (question: Question) => {
+    const updatedQuestion = { ...question, note: currentNote };
+    onEditQuestion(updatedQuestion);
+    setEditingNoteId(null);
+  };
+
 
   const handleExport = () => {
     const questionsTemplate = topic.questions.map(({ questionText, options, correctAnswerIndex }) => ({
@@ -124,7 +145,8 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
       if (!term) return true;
       const questionTextMatch = q.questionText.toLowerCase().includes(term);
       const optionsMatch = q.options.some(opt => opt.toLowerCase().includes(term));
-      return questionTextMatch || optionsMatch;
+      const noteMatch = q.note?.toLowerCase().includes(term);
+      return questionTextMatch || optionsMatch || !!noteMatch;
     });
   }, [topic.questions, searchTerm]);
 
@@ -181,7 +203,7 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
             </div>
             <input
                 type="text"
-                placeholder="Sorular içinde ara..."
+                placeholder="Sorular veya ipuçları içinde ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-md py-2 pl-10 pr-4 text-white placeholder-slate-400 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
@@ -195,6 +217,9 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
                       {filteredQuestions.map((question) => (
                           <li key={question.id} className="bg-slate-900/50 p-4 rounded-lg border border-slate-700 relative group">
                               <div className="absolute top-2 right-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                  <button onClick={() => handleEditNoteClick(question)} title="İpucu Ekle/Düzenle" className="p-1.5 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white">
+                                    <NoteIcon className="h-5 w-5" />
+                                  </button>
                                   <button onClick={() => setQuestionToEdit(question)} title="Soruyu Düzenle" className="p-1.5 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white">
                                       <EditIcon />
                                   </button>
@@ -202,7 +227,7 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
                                       <TrashIcon />
                                   </button>
                               </div>
-                              <p className="font-semibold text-white mb-3 pr-20">{topic.questions.findIndex(q => q.id === question.id) + 1}. {question.questionText}</p>
+                              <p className="font-semibold text-white mb-3 pr-28">{topic.questions.findIndex(q => q.id === question.id) + 1}. {question.questionText}</p>
                               <ul className="space-y-2">
                                   {question.options.map((option, oIndex) => (
                                       <li
@@ -217,6 +242,30 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
                                       </li>
                                   ))}
                               </ul>
+                                {editingNoteId === question.id ? (
+                                    <div className="mt-4 animate-fade-in">
+                                        <label htmlFor={`note-editor-${question.id}`} className="block text-sm font-medium text-slate-300 mb-2">İpucu / Not</label>
+                                        <textarea
+                                            id={`note-editor-${question.id}`}
+                                            value={currentNote}
+                                            onChange={(e) => setCurrentNote(e.target.value)}
+                                            rows={3}
+                                            className="w-full bg-slate-800 border border-slate-600 rounded-md p-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
+                                            placeholder="Bu soru için bir ipucu veya not ekleyin..."
+                                        />
+                                        <div className="flex justify-end gap-2 mt-2">
+                                            <button onClick={() => setEditingNoteId(null)} className="px-3 py-1 text-sm rounded-md bg-slate-600 hover:bg-slate-500 transition-colors">İptal</button>
+                                            <button onClick={() => handleSaveNote(question)} className="px-3 py-1 text-sm rounded-md bg-cyan-600 hover:bg-cyan-500 font-semibold transition-colors">Kaydet</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    question.note && (
+                                    <div className="mt-4 p-3 bg-slate-800/50 rounded-md border border-slate-700/50">
+                                        <p className="text-sm font-medium text-amber-300 mb-1">Kaydedilmiş İpucu:</p>
+                                        <div className="text-sm text-slate-300 prose-dark max-w-none" dangerouslySetInnerHTML={{ __html: question.note }} />
+                                    </div>
+                                    )
+                                )}
                           </li>
                       ))}
                   </ul>

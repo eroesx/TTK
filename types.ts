@@ -5,6 +5,7 @@ export interface Question {
   questionText: string;
   options: string[];
   correctAnswerIndex: number;
+  note?: string;
 }
 
 export interface Topic {
@@ -18,6 +19,7 @@ export interface Topic {
   flashcards: Flashcard[];
   isFavorite?: boolean;
   originalId?: string; // Used to track the original topic for shuffled quizzes
+  showHints?: boolean; // To show hints during the quiz
 }
 
 export interface Flashcard {
@@ -40,7 +42,7 @@ export interface HomeSelectionProps extends MobileLayoutProps {
 
 export interface TopicSelectionProps extends MobileLayoutProps {
   topics: Topic[];
-  onSelectTopic: (topic: Topic, shuffle: boolean) => void;
+  onSelectTopic: (topic: Topic, options: { shuffle: boolean; showHints: boolean; }) => void;
   onBack: () => void;
   onOpenAddQuestionModal: (topic: Topic) => void;
   onOpenViewQuestionsModal: (topic: Topic) => void;
@@ -69,6 +71,7 @@ export interface QuizViewProps extends MobileLayoutProps {
   onBackToHome: () => void;
   onDeleteQuestion: (topicId: string, questionId: number) => void;
   onEditQuestion: (topicId: string, updatedQuestion: Question) => void;
+  onUpdateQuestionNote: (topicId: string, questionId: number, note: string) => void;
 }
 
 export interface ResultsViewProps extends MobileLayoutProps {

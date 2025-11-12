@@ -150,7 +150,7 @@ const App: React.FC = () => {
     if (selectedTopic && !selectedTopic.originalId) { // Do not update if it's a shuffled quiz
       const updatedTopic = topics.find(t => t.id === selectedTopic.id);
       if (updatedTopic) {
-        setSelectedTopic(updatedTopic);
+        setSelectedTopic(prevSelected => ({...updatedTopic, showHints: prevSelected?.showHints}));
       } else {
         setSelectedTopic(null);
         setCurrentView('topicSelection');
@@ -175,8 +175,8 @@ const App: React.FC = () => {
     return newArray;
   };
 
-  const handleTopicSelect = (topic: Topic, shuffle: boolean) => {
-     if (shuffle) {
+  const handleTopicSelect = (topic: Topic, options: { shuffle: boolean, showHints: boolean }) => {
+     if (options.shuffle) {
       const shuffledQuestions = shuffleArray(topic.questions).map(q => {
         const correctAnswerValue = q.options[q.correctAnswerIndex];
         const shuffledOptions = shuffleArray(q.options);
@@ -193,10 +193,12 @@ const App: React.FC = () => {
         id: `shuffled-${topic.id}`,
         originalId: topic.id, // Keep track of the original
         questions: shuffledQuestions,
+        showHints: options.showHints,
       };
       setSelectedTopic(shuffledTopic);
     } else {
-      setSelectedTopic(topic);
+      const regularTopic: Topic = { ...topic, showHints: options.showHints };
+      setSelectedTopic(regularTopic);
     }
     setCurrentView('quiz');
   };
@@ -296,6 +298,22 @@ const App: React.FC = () => {
       const newTopics = currentTopics.map(topic => {
         if (topic.id === topicId) {
           const updatedQuestions = topic.questions.filter(q => q.id !== questionId);
+          return { ...topic, questions: updatedQuestions };
+        }
+        return topic;
+      });
+      saveTopics(newTopics);
+      return newTopics;
+    });
+  }, [saveTopics]);
+
+  const handleUpdateQuestionNote = useCallback((topicId: string, questionId: number, note: string) => {
+    setTopics(currentTopics => {
+      const newTopics = currentTopics.map(topic => {
+        if (topic.id === topicId) {
+          const updatedQuestions = topic.questions.map(q =>
+            q.id === questionId ? { ...q, note } : q
+          );
           return { ...topic, questions: updatedQuestions };
         }
         return topic;
@@ -657,6 +675,7 @@ const App: React.FC = () => {
             onBackToHome={handleBackToHome} 
             onDeleteQuestion={handleDeleteQuestion}
             onEditQuestion={handleEditQuestion}
+            onUpdateQuestionNote={handleUpdateQuestionNote}
             isMobileLayout={isMobileLayout} />;
       case 'results':
         return selectedTopic && <ResultsView 

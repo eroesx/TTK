@@ -9,6 +9,7 @@ import SearchIcon from './icons/SearchIcon';
 import ShuffleIcon from './icons/ShuffleIcon';
 import SortIcon from './icons/SortIcon';
 import SyncIcon from './icons/SyncIcon';
+import LightbulbIcon from './icons/LightbulbIcon';
 
 type SortOrder = 'recommended' | 'alpha-asc' | 'alpha-desc' | 'q-desc' | 'q-asc';
 
@@ -37,6 +38,7 @@ const TopicSelection: React.FC<TopicSelectionProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [shuffledTopics, setShuffledTopics] = useState<Set<string>>(new Set());
+  const [hintEnabledTopics, setHintEnabledTopics] = useState<Set<string>>(new Set());
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
     return (localStorage.getItem('topicSortOrder') as SortOrder) || 'recommended';
@@ -67,6 +69,18 @@ const TopicSelection: React.FC<TopicSelectionProps> = ({
 
   const toggleShuffle = (topicId: string) => {
     setShuffledTopics(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(topicId)) {
+        newSet.delete(topicId);
+      } else {
+        newSet.add(topicId);
+      }
+      return newSet;
+    });
+  };
+  
+  const toggleHints = (topicId: string) => {
+    setHintEnabledTopics(prev => {
       const newSet = new Set(prev);
       if (newSet.has(topicId)) {
         newSet.delete(topicId);
@@ -184,11 +198,12 @@ const TopicSelection: React.FC<TopicSelectionProps> = ({
           sortedTopics.map((topic, index) => {
             const iconComponent = availableIcons.find(icon => icon.name === topic.iconName)?.component;
             const isShuffled = shuffledTopics.has(topic.id);
+            const areHintsEnabled = hintEnabledTopics.has(topic.id);
 
             return (
             <div key={topic.id} className="relative group animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
               <div
-                onClick={() => onSelectTopic(topic, isShuffled)}
+                onClick={() => onSelectTopic(topic, { shuffle: isShuffled, showHints: areHintsEnabled })}
                 className={`w-full h-48 cursor-pointer flex flex-col items-center justify-center p-6 rounded-xl shadow-lg transition-all duration-300 ease-in-out transform hover:-translate-y-1 ${topic.bgColor} bg-opacity-80 border-2 border-slate-700/50 hover:border-cyan-400 focus:outline-none focus:ring-4 focus:ring-cyan-500/50`}
               >
                 <div className={`p-3 rounded-full mb-3 transition-transform duration-300 group-hover:scale-110 ${topic.color}`}>
@@ -229,7 +244,7 @@ const TopicSelection: React.FC<TopicSelectionProps> = ({
                   className="p-1.5 bg-slate-800/60 rounded-full text-slate-400 hover:text-amber-400 transition-colors duration-200"
                 > <EditIcon /> </button>
               </div>
-               <div className="absolute bottom-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+               <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <button
                   onClick={(e) => { e.stopPropagation(); toggleShuffle(topic.id); }}
                   aria-label={`${topic.name} konusu için soruları karıştır`}
@@ -237,6 +252,14 @@ const TopicSelection: React.FC<TopicSelectionProps> = ({
                   className="p-1.5 bg-slate-800/60 rounded-full text-slate-400 transition-colors duration-200"
                 >
                   <ShuffleIcon isActive={isShuffled} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleHints(topic.id); }}
+                  aria-label={`${topic.name} konusu için ipuçlarını göster`}
+                  title="İpuçlarını Göster"
+                  className="p-1.5 bg-slate-800/60 rounded-full text-slate-400 transition-colors duration-200"
+                >
+                  <LightbulbIcon isActive={areHintsEnabled} />
                 </button>
               </div>
               <div className="absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
