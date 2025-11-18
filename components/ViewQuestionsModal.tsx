@@ -139,14 +139,19 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
     reader.readAsText(file);
   };
 
+  const stripHtml = (html: string) => {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return doc.body.textContent || "";
+  };
+
   const filteredQuestions = useMemo(() => {
     return topic.questions.filter(q => {
       const term = searchTerm.toLowerCase();
       if (!term) return true;
       const questionTextMatch = q.questionText.toLowerCase().includes(term);
       const optionsMatch = q.options.some(opt => opt.toLowerCase().includes(term));
-      const noteMatch = q.note?.toLowerCase().includes(term);
-      return questionTextMatch || optionsMatch || !!noteMatch;
+      const noteMatch = q.note ? stripHtml(q.note).toLowerCase().includes(term) : false;
+      return questionTextMatch || optionsMatch || noteMatch;
     });
   }, [topic.questions, searchTerm]);
 

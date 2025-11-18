@@ -106,18 +106,46 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     };
   }, []);
 
+  // This effect runs when the topic selection changes to load a new deck.
   useEffect(() => {
     if (selectedTopic) {
-        const currentTopicState = topics.find(t => t.id === selectedTopic.id);
-        if (currentTopicState) {
-            const shuffledCards = [...currentTopicState.flashcards].sort(() => Math.random() - 0.5);
-            setDeck(currentTopicState.flashcards);
-            setStudyDeck(shuffledCards);
-            setBrowseIndex(0);
-        }
+      const currentTopicState = topics.find(t => t.id === selectedTopic.id);
+      if (currentTopicState) {
+        const shuffledCards = [...currentTopicState.flashcards].sort(() => Math.random() - 0.5);
+        setDeck(currentTopicState.flashcards);
+        setStudyDeck(shuffledCards); // Shuffle for study mode
+        setBrowseIndex(0);
         setIsFlipped(false);
+      } else {
+        setSelectedTopic(null);
+      }
     }
-  }, [selectedTopic, topics]);
+  }, [selectedTopic]); // Only runs on topic change
+
+  // This effect syncs data when the main `topics` array changes (e.g., edit/delete card).
+  // It preserves the current shuffled order of the study deck.
+  useEffect(() => {
+    if (!selectedTopic) return;
+
+    const currentTopicState = topics.find(t => t.id === selectedTopic.id);
+    if (currentTopicState) {
+      // Update browse deck
+      setDeck(currentTopicState.flashcards);
+
+      // Update study deck without changing order
+      const updatedCardMap = new Map(currentTopicState.flashcards.map(card => [card.id, card]));
+      setStudyDeck(prevStudyDeck =>
+        prevStudyDeck
+          .map(card => updatedCardMap.get(card.id))
+          .filter((card): card is Flashcard => !!card)
+      );
+      
+      // Ensure browseIndex is not out of bounds
+      if (browseIndex >= currentTopicState.flashcards.length) {
+        setBrowseIndex(Math.max(0, currentTopicState.flashcards.length - 1));
+      }
+    }
+  }, [topics]); // Only runs on topics change
   
    useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

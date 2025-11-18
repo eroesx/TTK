@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Topic, Question, Flashcard } from './types';
 import { availableIcons, availableColorPalettes, DATA_VERSION, quizData } from './data/quizData';
 import TopicSelection from './components/TopicSelection';
@@ -15,24 +15,18 @@ import SaveStatusToast from './components/SaveStatusToast';
 import BulkAddFlashcardsModal from './components/BulkAddFlashcardsModal';
 import BulkUpdateFlashcardsModal from './components/BulkUpdateFlashcardsModal';
 import ManageFlashcardsModal from './components/ManageFlashcardsModal';
+import RestoreSummaryModal from './components/RestoreSummaryModal';
 
 type View = 'home' | 'topicSelection' | 'quiz' | 'results' | 'summaries' | 'bilgiKartlari' | 'settings';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<View>('home');
-  const [isLoading, setIsLoading] = useState(true);
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [initialTopics, setInitialTopics] = useState<Topic[]>([]);
+// Helper function to generate initial topics from quizData
+const generateInitialTopics = (): Topic[] => {
+    const { topicNames, summariesData, questionsData } = quizData;
 
-  useEffect(() => {
-    const initializeAppData = () => {
-      try {
-        const { topicNames, summariesData, questionsData } = quizData;
-
-        const generatedInitialTopics: Topic[] = topicNames.map((name: string, index: number) => {
-          const id = name.toLowerCase()
+    return topicNames.map((name: string, index: number) => {
+        const id = name.toLowerCase()
             .replace(/ /g, '-')
             .replace(/ı/g, 'i')
             .replace(/ğ/g, 'g')
@@ -42,7 +36,7 @@ const App: React.FC = () => {
             .replace(/ç/g, 'c')
             .replace(/[^a-z0-9-]/g, '');
 
-          return {
+        return {
             id: `${id}-${index}`,
             name: name,
             iconName: availableIcons[index % availableIcons.length].name,
@@ -52,9 +46,130 @@ const App: React.FC = () => {
             summary: summariesData[index] || '',
             flashcards: [],
             isFavorite: false,
-          };
-        });
+        };
+    });
+};
 
+const useDebouncedSave = (topics: Topic[], initialTopics: Topic[]) => {
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  // FIX: Explicitly initialize useRef with null to provide an initial value and a more accurate type.
+  const timeoutRef = useRef<number | null>(null);
+  const isInitialMount = useRef(true);
+
+  useEffect(() => {
+    // initialTopics is stable, so we don't save when topics are first loaded.
+    if (isInitialMount.current || topics === initialTopics) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    setSaveStatus('saving');
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = window.setTimeout(() => {
+      try {
+        localStorage.setItem('appTopics', JSON.stringify(topics));
+        localStorage.setItem('appDataVersion', DATA_VERSION.toString());
+        setSaveStatus('saved');
+      } catch (error) {
+        console.error("Failed to save topics:", error);
+        setSaveStatus('error');
+      }
+    }, 1500);
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [topics, initialTopics]);
+
+  const handleIdle = useCallback(() => {
+    if (saveStatus === 'saved' || saveStatus === 'error') {
+      setSaveStatus('idle');
+    }
+  }, [saveStatus]);
+
+  return { saveStatus, onIdle: handleIdle };
+};
+
+
+const App: React.FC = () => {
+  const [currentView, setCurrentView] = useState<View>('home');
+  const [isLoading, setIsLoading] = useState(true);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [initialTopics, setInitialTopics] = useState<Topic[]>([]);
+  const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
+  const [quizScore, setQuizScore] = useState(0);
+  const [isAddQuestionModalOpen, setIsAddQuestionModalOpen] = useState(false);
+  const [isViewQuestionsModalOpen, setIsViewQuestionsModalOpen] = useState(false);
+  const [isEditTopicModalOpen, setIsEditTopicModalOpen] = useState(false);
+  const [topicForModal, setTopicForModal] = useState<Topic | null>(null);
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const lastQuizScores = useRef<{[key: string]: number}>({});
+  const [previousScore, setPreviousScore] = useState<number | undefined>(undefined);
+
+  const [isBulkAddFlashcardsModalOpen, setIsBulkAddFlashcardsModalOpen] = useState(false);
+  const [isBulkUpdateFlashcardsModalOpen, setIsBulkUpdateFlashcardsModalOpen] = useState(false);
+  const [isManageFlashcardsModalOpen, setIsManageFlashcardsModalOpen] = useState(false);
+
+  const [isRestoreSummaryModalOpen, setIsRestoreSummaryModalOpen] = useState(false);
+  const [restoreData, setRestoreData] = useState<{ topics: Topic[], version: number } | null>(null);
+
+
+  const { saveStatus, onIdle } = useDebouncedSave(topics, initialTopics);
+
+  // This effect synchronizes the topic objects held in state for modals/views
+  // with the main `topics` array. This prevents stale data from being displayed
+  // after an update (e.g., adding/deleting questions).
+  useEffect(() => {
+      // Sync topic for modals (ViewQuestionsModal, EditTopicModal, etc.)
+      if (topicForModal) {
+          const currentVersionInTopics = topics.find(t => t.id === topicForModal.id);
+          // If the topic exists in the main array and the object reference is different, update it.
+          if (currentVersionInTopics && currentVersionInTopics !== topicForModal) {
+              setTopicForModal(currentVersionInTopics);
+          }
+      }
+
+      // Sync topic for the active quiz view
+      if (selectedTopic) {
+          const originalId = selectedTopic.originalId || selectedTopic.id;
+          const currentVersionInTopics = topics.find(t => t.id === originalId);
+
+          if (currentVersionInTopics) {
+              // For a non-shuffled quiz, simply update the topic object if it's stale.
+              if (!selectedTopic.originalId && currentVersionInTopics !== selectedTopic) {
+                  setSelectedTopic(currentVersionInTopics);
+              }
+              // For a shuffled quiz, we need to reflect deletions/edits made to the original topic
+              // without losing the shuffled order.
+              else if (selectedTopic.originalId) {
+                  const originalQuestionsMap = new Map(currentVersionInTopics.questions.map(q => [q.id, q]));
+                  
+                  const updatedShuffledQuestions = selectedTopic.questions
+                      .map(q => originalQuestionsMap.get(q.id)) // Get the updated question version
+                      .filter((q): q is Question => q !== undefined); // Filter out deleted questions
+
+                  // Only update state if the questions list has actually changed to avoid loops.
+                  const questionsHaveChanged = updatedShuffledQuestions.length !== selectedTopic.questions.length || 
+                                             updatedShuffledQuestions.some((q, i) => q !== selectedTopic.questions[i]);
+
+                  if (questionsHaveChanged) {
+                      setSelectedTopic(prev => prev ? { ...prev, questions: updatedShuffledQuestions } : null);
+                  }
+              }
+          }
+      }
+  }, [topics, topicForModal, selectedTopic]);
+
+
+  useEffect(() => {
+    const initializeAppData = () => {
+      try {
+        const generatedInitialTopics = generateInitialTopics();
         setInitialTopics(generatedInitialTopics);
         
         const savedTopicsRaw = localStorage.getItem('appTopics');
@@ -73,640 +188,484 @@ const App: React.FC = () => {
             const userTopics = savedTopics.filter((t: Topic) => !initialTopicsMap.has(t.id));
 
             const migratedTopics = generatedInitialTopics.map(initialTopic => {
-              const savedVersionOfTopic = savedTopics.find((t: Topic) => t.id === initialTopic.id);
+              const savedVersionOfTopic = savedTopics.find(st => st.id === initialTopic.id);
               if (savedVersionOfTopic) {
-                return {
-                  ...initialTopic,
-                  summary: savedVersionOfTopic.summary,
-                  flashcards: savedVersionOfTopic.flashcards,
-                  isFavorite: savedVersionOfTopic.isFavorite,
-                };
+                 // Preserve user data (favorites, notes, etc.) while updating core content
+                 return {
+                   ...initialTopic, // take structure and core content from new data
+                   ...savedVersionOfTopic, // override with user's specific data
+                   questions: initialTopic.questions.map(q => { // Keep notes on old questions
+                       const oldQ = savedVersionOfTopic.questions.find(old => old.id === q.id);
+                       return oldQ?.note ? {...q, note: oldQ.note} : q;
+                   }), 
+                   summary: initialTopic.summary, // always overwrite summary with new data
+                 };
               }
               return initialTopic;
             });
             
             finalTopics = [...migratedTopics, ...userTopics];
-
-            localStorage.setItem('appTopics', JSON.stringify(finalTopics));
-            localStorage.setItem('appDataVersion', String(DATA_VERSION));
+            alert('Uygulama verileri en son sürüme güncellendi!');
           } else {
             finalTopics = savedTopics;
           }
         } else {
-          localStorage.setItem('appDataVersion', String(DATA_VERSION));
           finalTopics = generatedInitialTopics;
         }
         setTopics(finalTopics);
-      } catch (error) {
-        console.error("Uygulama verileri yüklenirken hata oluştu:", error);
+      } catch (e) {
+        console.error("Initialization error:", e);
+        // If parsing fails, reset to default data
+        const defaultTopics = generateInitialTopics();
+        setTopics(defaultTopics);
+        setInitialTopics(defaultTopics);
       } finally {
         setIsLoading(false);
       }
     };
+    
+    const savedLayout = localStorage.getItem('isMobileLayout');
+    if (savedLayout) {
+        setIsMobileLayout(JSON.parse(savedLayout));
+    }
 
     initializeAppData();
-  }, []);
+  }, []); // Empty dependency array ensures this runs only once on mount
 
-  const [isMobileLayout, setIsMobileLayout] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('isMobileLayout');
-      return saved ? JSON.parse(saved) : false;
-    } catch (error) {
-      console.error("Mobil arayüz ayarı okunurken hata oluştu:", error);
-      return false;
-    }
-  });
-
-  const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
-  const [finalScore, setFinalScore] = useState(0);
-  const [previousScore, setPreviousScore] = useState<number | undefined>(undefined);
-  const [isAddQuestionModalOpen, setIsAddQuestionModalOpen] = useState(false);
-  const [topicToAddTo, setTopicToAddTo] = useState<Topic | null>(null);
-  const [isViewQuestionsModalOpen, setIsViewQuestionsModalOpen] = useState(false);
-  const [topicToViewQuestionsId, setTopicToViewQuestionsId] = useState<string | null>(null);
-  const [isEditTopicModalOpen, setIsEditTopicModalOpen] = useState(false);
-  const [topicToEdit, setTopicToEdit] = useState<Topic | null>(null);
-  const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
-  const [topicToBulkAddTo, setTopicToBulkAddTo] = useState<Topic | null>(null);
-  const [isBulkUpdateModalOpen, setIsBulkUpdateModalOpen] = useState(false);
-  const [topicToBulkUpdate, setTopicToBulkUpdate] = useState<Topic | null>(null);
-  const [isManageCardsModalOpen, setIsManageCardsModalOpen] = useState(false);
-  const [topicToManageCardsId, setTopicToManageCardsId] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-  
-  const saveTopics = useCallback((newTopics: Topic[]) => {
-    setSaveStatus('saving');
-    try {
-      localStorage.setItem('appTopics', JSON.stringify(newTopics));
-      setSaveStatus('saved');
-    } catch (error) {
-      console.error("Konular kaydedilirken hata oluştu:", error);
-      setSaveStatus('error');
-    }
-  }, []);
-
-
-  useEffect(() => {
-    if (selectedTopic && !selectedTopic.originalId) { // Do not update if it's a shuffled quiz
-      const updatedTopic = topics.find(t => t.id === selectedTopic.id);
-      if (updatedTopic) {
-        setSelectedTopic(prevSelected => ({...updatedTopic, showHints: prevSelected?.showHints}));
-      } else {
-        setSelectedTopic(null);
-        setCurrentView('topicSelection');
-      }
-    }
-  }, [topics, selectedTopic?.id]);
-  
-  const handleToggleMobileLayout = useCallback(() => {
-    setIsMobileLayout(prev => {
-        const newValue = !prev;
-        localStorage.setItem('isMobileLayout', JSON.stringify(newValue));
-        return newValue;
-    });
-  }, []);
-  
-  const shuffleArray = <T,>(array: T[]): T[] => {
-    const newArray = [...array];
-    for (let i = newArray.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-    }
-    return newArray;
-  };
-
-  const handleTopicSelect = (topic: Topic, options: { shuffle: boolean, showHints: boolean }) => {
-     if (options.shuffle) {
-      const shuffledQuestions = shuffleArray(topic.questions).map(q => {
-        const correctAnswerValue = q.options[q.correctAnswerIndex];
-        const shuffledOptions = shuffleArray(q.options);
-        const newCorrectIndex = shuffledOptions.findIndex(opt => opt === correctAnswerValue);
-        return {
-          ...q,
-          options: shuffledOptions,
-          correctAnswerIndex: newCorrectIndex,
+  const handleSelectTopic = (topic: Topic, options: { shuffle: boolean; showHints: boolean; }) => {
+    let topicForQuiz = { ...topic, showHints: options.showHints };
+    if (options.shuffle) {
+        const shuffledQuestions = [...topic.questions].sort(() => Math.random() - 0.5);
+        topicForQuiz = {
+            ...topicForQuiz,
+            questions: shuffledQuestions,
+            id: `shuffled-${topic.id}`, // Create a temporary unique ID for the shuffled quiz
+            originalId: topic.id
         };
-      });
-      
-      const shuffledTopic: Topic = {
-        ...topic,
-        id: `shuffled-${topic.id}`,
-        originalId: topic.id, // Keep track of the original
-        questions: shuffledQuestions,
-        showHints: options.showHints,
-      };
-      setSelectedTopic(shuffledTopic);
-    } else {
-      const regularTopic: Topic = { ...topic, showHints: options.showHints };
-      setSelectedTopic(regularTopic);
     }
+    setSelectedTopic(topicForQuiz);
+    
+    // Set previous score for the results view
+    const originalTopicId = topic.id;
+    const lastScore = lastQuizScores.current[originalTopicId];
+    if (lastScore !== undefined) {
+        const totalQuestions = topic.questions.length;
+        const percentage = totalQuestions > 0 ? Math.round((lastScore / totalQuestions) * 100) : 0;
+        setPreviousScore(percentage);
+    } else {
+        setPreviousScore(undefined);
+    }
+    
     setCurrentView('quiz');
   };
 
   const handleQuizComplete = (score: number) => {
-    setFinalScore(score);
-
+    setQuizScore(score);
     if (selectedTopic) {
-        const topicId = selectedTopic.originalId || selectedTopic.id;
-        try {
-            const scoresHistory = JSON.parse(localStorage.getItem('quizScoresHistory') || '{}');
-            const prevScore = scoresHistory[topicId];
-            setPreviousScore(prevScore); 
-
-            const newPercentage = selectedTopic.questions.length > 0 ? Math.round((score / selectedTopic.questions.length) * 100) : 0;
-            scoresHistory[topicId] = newPercentage;
-            localStorage.setItem('quizScoresHistory', JSON.stringify(scoresHistory));
-        } catch (error) {
-            console.error("Skor geçmişi işlenirken hata oluştu:", error);
-            setPreviousScore(undefined);
-        }
+        // Store score against the original topic ID even for shuffled quizzes
+        const originalTopicId = selectedTopic.originalId || selectedTopic.id;
+        lastQuizScores.current = { ...lastQuizScores.current, [originalTopicId]: score };
     }
-    
     setCurrentView('results');
   };
 
   const handleBackToTopics = () => {
     setSelectedTopic(null);
     setCurrentView('topicSelection');
-    setFinalScore(0);
-    setPreviousScore(undefined);
   };
 
   const handleBackToHome = () => {
     setSelectedTopic(null);
     setCurrentView('home');
-    setFinalScore(0);
-    setPreviousScore(undefined);
   };
-  
-  const handleOpenAddQuestionModal = useCallback((topic: Topic) => {
-    setTopicToAddTo(topic);
+
+  const handleAddQuestion = (topicId: string, newQuestion: Question) => {
+    setTopics(prevTopics =>
+      prevTopics.map(topic =>
+        topic.id === topicId
+          ? { ...topic, questions: [...topic.questions, newQuestion] }
+          : topic
+      )
+    );
+  };
+
+  const handleOpenAddQuestionModal = (topic: Topic) => {
+    setTopicForModal(topic);
     setIsAddQuestionModalOpen(true);
-  }, []);
+  };
 
-  const handleCloseAddQuestionModal = useCallback(() => {
-    setTopicToAddTo(null);
-    setIsAddQuestionModalOpen(false);
-  }, []);
-
-  const handleAddNewQuestion = useCallback((topicId: string, newQuestion: Question) => {
-    setTopics(currentTopics => {
-      const newTopics = currentTopics.map(topic => {
-        if (topic.id === topicId) {
-          const updatedQuestions = [...topic.questions, newQuestion];
-          return { ...topic, questions: updatedQuestions };
-        }
-        return topic;
-      });
-      saveTopics(newTopics);
-      return newTopics;
-    });
-  }, [saveTopics]);
-
-  const handleAddNewBulkQuestions = useCallback((topicId: string, newQuestions: Question[]) => {
-    setTopics(currentTopics => {
-      const newTopics = currentTopics.map(topic => {
-        if (topic.id === topicId) {
-          const updatedQuestions = [...topic.questions, ...newQuestions];
-          return { ...topic, questions: updatedQuestions };
-        }
-        return topic;
-      });
-      saveTopics(newTopics);
-      return newTopics;
-    });
-  }, [saveTopics]);
-  
-  const handleEditQuestion = useCallback((topicId: string, updatedQuestion: Question) => {
-    setTopics(currentTopics => {
-      const newTopics = currentTopics.map(topic => {
-        if (topic.id === topicId) {
-          const updatedQuestions = topic.questions.map(q => 
-            q.id === updatedQuestion.id ? updatedQuestion : q
-          );
-          return { ...topic, questions: updatedQuestions };
-        }
-        return topic;
-      });
-      saveTopics(newTopics);
-      return newTopics;
-    });
-  }, [saveTopics]);
-
-  const handleDeleteQuestion = useCallback((topicId: string, questionId: number) => {
-    setTopics(currentTopics => {
-      const newTopics = currentTopics.map(topic => {
-        if (topic.id === topicId) {
-          const updatedQuestions = topic.questions.filter(q => q.id !== questionId);
-          return { ...topic, questions: updatedQuestions };
-        }
-        return topic;
-      });
-      saveTopics(newTopics);
-      return newTopics;
-    });
-  }, [saveTopics]);
-
-  const handleUpdateQuestionNote = useCallback((topicId: string, questionId: number, note: string) => {
-    setTopics(currentTopics => {
-      const newTopics = currentTopics.map(topic => {
-        if (topic.id === topicId) {
-          const updatedQuestions = topic.questions.map(q =>
-            q.id === questionId ? { ...q, note } : q
-          );
-          return { ...topic, questions: updatedQuestions };
-        }
-        return topic;
-      });
-      saveTopics(newTopics);
-      return newTopics;
-    });
-  }, [saveTopics]);
-
-  const handleOpenViewQuestionsModal = useCallback((topic: Topic) => {
-    setTopicToViewQuestionsId(topic.id);
+  const handleOpenViewQuestionsModal = (topic: Topic) => {
+    setTopicForModal(topic);
     setIsViewQuestionsModalOpen(true);
-  }, []);
+  };
 
-  const handleCloseViewQuestionsModal = useCallback(() => {
-    setTopicToViewQuestionsId(null);
-    setIsViewQuestionsModalOpen(false);
-  }, []);
-
-  const handleOpenEditTopicModal = useCallback((topic: Topic) => {
-    setTopicToEdit(topic);
+  const handleOpenEditTopicModal = (topic: Topic) => {
+    setTopicForModal(topic);
     setIsEditTopicModalOpen(true);
-  }, []);
-  
-  const handleOpenAddTopicModal = useCallback(() => {
-    const newTopicTemplate: Topic = {
-        id: `topic-${Date.now()}`,
-        name: '',
+  };
+
+  const handleAddNewTopic = () => {
+    // Create a blank topic object to be populated by the modal
+    const newTopic: Topic = {
+        id: `custom-${Date.now()}`,
+        name: "", // Will be set in modal
         iconName: availableIcons[0].name,
         questions: [],
-        color: availableColorPalettes[0].color,
-        bgColor: availableColorPalettes[0].bgColor,
         summary: '',
         flashcards: [],
-        isFavorite: false,
+        color: availableColorPalettes[0].color,
+        bgColor: availableColorPalettes[0].bgColor,
     };
-    setTopicToEdit(newTopicTemplate);
+    setTopicForModal(newTopic);
     setIsEditTopicModalOpen(true);
-  }, []);
+};
 
-  const handleCloseEditTopicModal = useCallback(() => {
-    setTopicToEdit(null);
+const handleSaveTopic = (updatedTopic: Topic) => {
+    const isNew = !topics.some(t => t.id === updatedTopic.id);
+    if (isNew) {
+        // Create a more stable ID based on the name for new topics
+        const finalNewTopic = {
+            ...updatedTopic,
+            id: updatedTopic.name.toLowerCase().replace(/ /g, '-') + `-${Date.now()}`
+        };
+        setTopics(prev => [...prev, finalNewTopic]);
+    } else {
+        setTopics(prev => prev.map(t => t.id === updatedTopic.id ? updatedTopic : t));
+    }
     setIsEditTopicModalOpen(false);
-  }, []);
+    setTopicForModal(null);
+};
 
-  const handleSaveTopic = useCallback((topicToSave: Topic) => {
-    setTopics(currentTopics => {
-        const topicExists = currentTopics.some(t => t.id === topicToSave.id);
-        let newTopics;
-        if (topicExists) {
-            newTopics = currentTopics.map(topic => 
-                topic.id === topicToSave.id ? topicToSave : topic
-            );
-        } else {
-            newTopics = [...currentTopics, topicToSave];
-        }
-        saveTopics(newTopics);
-        return newTopics;
-    });
-    if (selectedTopic && selectedTopic.id === topicToSave.id) {
-      setSelectedTopic(topicToSave);
+const handleDeleteTopic = (topicId: string) => {
+    const topicToDelete = topics.find(t => t.id === topicId);
+    if (topicToDelete && window.confirm(`'${topicToDelete.name}' konusunu ve içindeki tüm soruları, özetleri, bilgi kartlarını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
+        setTopics(prev => prev.filter(t => t.id !== topicId));
     }
-    handleCloseEditTopicModal();
-  }, [selectedTopic, handleCloseEditTopicModal, saveTopics]);
-  
-  const handleUpdateSummary = useCallback((topicId: string, newSummary: string) => {
-    setTopics(currentTopics => {
-      const newTopics = currentTopics.map(topic => {
-        if (topic.id === topicId) {
-          return { ...topic, summary: newSummary };
-        }
-        return topic;
-      });
-      saveTopics(newTopics);
-      return newTopics;
-    });
-  }, [saveTopics]);
+};
 
-  const handleDeleteTopic = useCallback((topicId: string) => {
-    if (window.confirm("Bu konuyu ve tüm içeriğini (sorular, bilgi kartları, özet) silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.")) {
-      setTopics(currentTopics => {
-        const newTopics = currentTopics.filter(topic => topic.id !== topicId);
-        saveTopics(newTopics);
-        return newTopics;
-      });
-      if (selectedTopic && selectedTopic.id === topicId) {
-        setSelectedTopic(null);
-        setCurrentView('topicSelection');
-      }
-    }
-  }, [selectedTopic, saveTopics]);
+const handleEditQuestion = (topicId: string, updatedQuestion: Question) => {
+    setTopics(prevTopics =>
+        prevTopics.map(topic =>
+            topic.id === topicId
+                ? {
+                    ...topic,
+                    questions: topic.questions.map(q =>
+                        q.id === updatedQuestion.id ? updatedQuestion : q
+                    ),
+                }
+                : topic
+        )
+    );
+};
 
-  const handleToggleFavorite = useCallback((topicId: string) => {
-    setTopics(currentTopics => {
-        const newTopics = currentTopics.map(topic =>
-            topic.id === topicId ? { ...topic, isFavorite: !topic.isFavorite } : topic
-        );
-        saveTopics(newTopics);
-        return newTopics;
-    });
-  }, [saveTopics]);
-  
-  const handleAddNewFlashcard = useCallback((topicId: string, newCardData: Omit<Flashcard, 'id'>) => {
-    setTopics(currentTopics => {
-      const newTopics = currentTopics.map(topic => {
-        if (topic.id === topicId) {
-          const existingCards = topic.flashcards;
-          const lastId = existingCards.length > 0 ? Math.max(...existingCards.map(c => c.id)) : 0;
-          const newCardWithId: Flashcard = {
-            ...newCardData,
-            id: lastId + 1,
-          };
-          const finalFlashcards = [...existingCards, newCardWithId];
-          return { ...topic, flashcards: finalFlashcards };
-        }
-        return topic;
-      });
-      saveTopics(newTopics);
-      return newTopics;
-    });
-  }, [saveTopics]);
-
-  const handleEditFlashcard = useCallback((topicId: string, cardId: number, updatedCard: Omit<Flashcard, 'id'>) => {
-      setTopics(currentTopics => {
-          const newTopics = currentTopics.map(topic => {
-              if (topic.id === topicId) {
-                  const updatedFlashcards = topic.flashcards.map(card => 
-                      card.id === cardId ? { ...card, ...updatedCard } : card
-                  );
-                  return { ...topic, flashcards: updatedFlashcards };
-              }
-              return topic;
-          });
-          saveTopics(newTopics);
-          return newTopics;
-      });
-  }, [saveTopics]);
-
-  const handleDeleteFlashcard = useCallback((topicId: string, cardId: number) => {
-      setTopics(currentTopics => {
-        const newTopics = currentTopics.map(topic => {
+const handleDeleteQuestion = (topicId: string, questionId: number) => {
+    setTopics(prevTopics =>
+        prevTopics.map(topic => {
             if (topic.id === topicId) {
-                const updatedFlashcards = topic.flashcards.filter(card => card.id !== cardId);
-                return { ...topic, flashcards: updatedFlashcards };
+                const updatedQuestions = topic.questions.filter(q => q.id !== questionId);
+                return { ...topic, questions: updatedQuestions };
             }
             return topic;
-        });
-        saveTopics(newTopics);
-        return newTopics;
-      });
-  }, [saveTopics]);
+        })
+    );
+};
 
-  const handleOpenBulkAddModal = useCallback((topic: Topic) => {
-    setTopicToBulkAddTo(topic);
-    setIsBulkAddModalOpen(true);
-  }, []);
-
-  const handleCloseBulkAddModal = useCallback(() => {
-    setTopicToBulkAddTo(null);
-    setIsBulkAddModalOpen(false);
-  }, []);
-
-  const handleBulkAddFlashcards = useCallback((topicId: string, newCards: Array<Omit<Flashcard, 'id'>>) => {
-    setTopics(currentTopics => {
-      const newTopics = currentTopics.map(topic => {
+const handleUpdateQuestionNote = (topicId: string, questionId: number, note: string) => {
+    setTopics(prevTopics => prevTopics.map(topic => {
         if (topic.id === topicId) {
-          const existingCards = topic.flashcards;
-          const lastId = existingCards.length > 0 ? Math.max(...existingCards.map(c => c.id)) : 0;
-          const newFlashcardsWithIds = newCards.map((card, index) => ({
-            ...card,
-            id: lastId + index + 1,
-          }));
-          const finalFlashcards = [...existingCards, ...newFlashcardsWithIds];
-          return { ...topic, flashcards: finalFlashcards };
+            return {
+                ...topic,
+                questions: topic.questions.map(q => 
+                    q.id === questionId ? { ...q, note: note } : q
+                )
+            };
         }
         return topic;
-      });
-      saveTopics(newTopics);
-      return newTopics;
+    }));
+};
+
+const handleUpdateSummary = (topicId: string, newSummary: string) => {
+    setTopics(prevTopics => prevTopics.map(topic => 
+        topic.id === topicId ? { ...topic, summary: newSummary } : topic
+    ));
+};
+
+const handleToggleFavorite = (topicId: string) => {
+    setTopics(prevTopics => prevTopics.map(topic =>
+        topic.id === topicId ? { ...topic, isFavorite: !topic.isFavorite } : topic
+    ));
+};
+
+const handleToggleMobileLayout = () => {
+    setIsMobileLayout(prev => {
+        const newLayoutState = !prev;
+        localStorage.setItem('isMobileLayout', JSON.stringify(newLayoutState));
+        return newLayoutState;
     });
-  }, [saveTopics]);
-  
-  const handleOpenBulkUpdateModal = useCallback((topic: Topic) => {
-    setTopicToBulkUpdate(topic);
-    setIsBulkUpdateModalOpen(true);
-  }, []);
+};
 
-  const handleCloseBulkUpdateModal = useCallback(() => {
-    setTopicToBulkUpdate(null);
-    setIsBulkUpdateModalOpen(false);
-  }, []);
-
-  const handleBulkUpdateFlashcards = useCallback((topicId: string, newCards: Array<Omit<Flashcard, 'id'>>) => {
-    setTopics(currentTopics => {
-      const newTopics = currentTopics.map(topic => {
-        if (topic.id === topicId) {
-          // Replace all flashcards with new ones, assigning new IDs
-          const newFlashcardsWithIds = newCards.map((card, index) => ({
-            ...card,
-            id: index + 1, // Resetting IDs
-          }));
-          return { ...topic, flashcards: newFlashcardsWithIds };
+const handleResetData = () => {
+    if (window.confirm("UYARI: Tüm verilerinizi (eklediğiniz konular, sorular, notlar, favoriler vb.) silmek ve uygulamayı ilk haline döndürmek istediğinizden emin misiniz? Bu işlem geri alınamaz!")) {
+        try {
+            // Clear all data from localStorage for this origin.
+            // This is more robust than removing items one by one.
+            localStorage.clear();
+            
+            alert("Uygulama verileri başarıyla sıfırlandı. Uygulama yeniden başlatılıyor.");
+            
+            // Reload the page to force re-initialization from the default state.
+            window.location.reload();
+        } catch (error) {
+            console.error("Failed to reset data in localStorage:", error);
+            alert("Veriler sıfırlanırken bir hata oluştu.");
         }
-        return topic;
-      });
-      saveTopics(newTopics);
-      return newTopics;
-    });
-  }, [saveTopics]);
+    }
+};
+
+const handleBackupData = () => {
+    try {
+        const dataToBackup = {
+            appDataVersion: DATA_VERSION,
+            appTopics: topics,
+        };
+        const jsonString = JSON.stringify(dataToBackup, null, 2);
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        const date = new Date().toISOString().slice(0, 10);
+        link.download = `ttk_sinav_yedek_${date}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        console.error("Backup failed:", e);
+        alert("Veriler yedeklenirken bir hata oluştu.");
+    }
+};
+
+const handleRestoreData = (file: File) => {
+    if (!window.confirm("Yedekten geri yüklemek istediğinizden emin misiniz? Mevcut tüm verileriniz (eklediğiniz konular, sorular, notlar vb.) silinecek ve yedek dosyasındaki verilerle değiştirilecektir.")) {
+      return;
+    }
   
-  const handleOpenManageCardsModal = useCallback((topic: Topic) => {
-    setTopicToManageCardsId(topic.id);
-    setIsManageCardsModalOpen(true);
-  }, []);
+    const reader = new FileReader();
 
-  const handleCloseManageCardsModal = useCallback(() => {
-    setTopicToManageCardsId(null);
-    setIsManageCardsModalOpen(false);
-  }, []);
+    reader.onerror = () => {
+        alert('Dosya okunurken bir hata meydana geldi.');
+        console.error('File reading failed.');
+    };
 
-  const handleResetData = useCallback(() => {
-    if (window.confirm("Tüm değişiklikleri sıfırlamak ve başlangıç verilerine dönmek istediğinizden emin misiniz? Eklediğiniz tüm konular, sorular ve diğer veriler silinecektir.")) {
+    reader.onload = (event) => {
       try {
-        localStorage.removeItem('appTopics');
-        localStorage.removeItem('quizScoresHistory');
-        localStorage.removeItem('appDataVersion');
-        setTopics(initialTopics);
-        setCurrentView('home');
-        alert("Uygulama verileri başarıyla sıfırlandı.");
-      } catch (error) {
-        console.error("Veri sıfırlanırken hata oluştu:", error);
-        alert("Veri sıfırlanırken bir hata oluştu.");
-      }
-    }
-  }, [initialTopics]);
+        const result = event.target?.result;
+        if (typeof result === 'string') {
+          const restoredData = JSON.parse(result);
+          
+          if (restoredData.appTopics && Array.isArray(restoredData.appTopics)) {
+            const newTopics = restoredData.appTopics as Topic[];
+            const newVersion = (restoredData.appDataVersion as number) ?? 0; // Default to 0 if undefined/null
 
-  const handleSyncData = useCallback(() => {
-    if (window.confirm("Bu işlem, mevcut soru bankanızı uygulamanın orijinal haliyle güncelleyecektir. Kendi eklediğiniz veya düzenlediğiniz sorular silinecektir. Test skoru geçmişiniz korunacaktır. Devam etmek istiyor musunuz?")) {
-      try {
-        const currentDataMap = new Map<string, { summary: string; flashcards: Flashcard[] }>();
-        topics.forEach(topic => {
-          currentDataMap.set(topic.id, { summary: topic.summary, flashcards: topic.flashcards });
-        });
+            setRestoreData({ topics: newTopics, version: newVersion });
+            setIsRestoreSummaryModalOpen(true);
 
-        const syncedTopics = initialTopics.map(initialTopic => {
-          const currentData = currentDataMap.get(initialTopic.id);
-          return {
-            ...initialTopic,
-            summary: currentData ? currentData.summary : initialTopic.summary,
-            flashcards: currentData ? currentData.flashcards : initialTopic.flashcards,
-            isFavorite: topics.find(t => t.id === initialTopic.id)?.isFavorite || false
-          };
-        });
-
-        setTopics(syncedTopics);
-        saveTopics(syncedTopics);
-        alert("Soru bankası başarıyla güncellendi.");
-      } catch (error) {
-        console.error("Veri senkronize edilirken hata oluştu:", error);
-        alert("Veri senkronize edilirken bir hata oluştu.");
-      }
-    }
-  }, [topics, saveTopics, initialTopics]);
-
-  const handleBackupData = useCallback(() => {
-      try {
-          const scoresHistory = localStorage.getItem('quizScoresHistory') || '{}';
-          const dataToBackup = {
-              appDataVersion: DATA_VERSION,
-              appTopics: topics,
-              quizScoresHistory: JSON.parse(scoresHistory)
-          };
-          const jsonString = JSON.stringify(dataToBackup, null, 2);
-          const blob = new Blob([jsonString], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          const timestamp = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '');
-          link.download = `ttk_sinav_yedek_${timestamp}.json`;
-          link.href = url;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-      } catch (error) {
-          console.error("Yedekleme sırasında hata:", error);
-          alert("Veri yedeklenirken bir hata oluştu.");
-      }
-  }, [topics]);
-
-  const handleRestoreData = useCallback((file: File) => {
-      if (!window.confirm("Bu işlem mevcut tüm verilerinizi (konular, sorular, kartlar, özetler, skorlar) yedek dosyasındaki verilerle değiştirecektir. Devam etmek istediğinizden emin misiniz?")) {
-          return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-          try {
-              const content = e.target?.result;
-              if (typeof content !== 'string') throw new Error("Dosya içeriği okunamadı.");
-              
-              const parsedData = JSON.parse(content);
-
-              if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.appTopics)) {
-                  throw new Error("Yedek dosyası geçersiz veya bozuk formatta.");
-              }
-              
-              const restoredTopics: Topic[] = parsedData.appTopics;
-              setTopics(restoredTopics);
-              saveTopics(restoredTopics);
-
-              if (parsedData.quizScoresHistory && typeof parsedData.quizScoresHistory === 'object') {
-                  localStorage.setItem('quizScoresHistory', JSON.stringify(parsedData.quizScoresHistory));
-              } else {
-                  localStorage.removeItem('quizScoresHistory');
-              }
-
-              if (parsedData.appDataVersion && typeof parsedData.appDataVersion === 'number') {
-                   localStorage.setItem('appDataVersion', String(parsedData.appDataVersion));
-              } else {
-                   localStorage.setItem('appDataVersion', String(DATA_VERSION));
-              }
-
-              alert("Veriler başarıyla geri yüklendi. Değişikliklerin tamamen uygulanması için sayfa yenilenecektir.");
-              window.location.reload();
-
-          } catch (error) {
-               if (error instanceof Error) {
-                  alert(`Geri yükleme hatası: ${error.message}`);
-              } else {
-                  alert("Bilinmeyen bir hata oluştu.");
-              }
+          } else if (restoredData.topicNames && Array.isArray(restoredData.topicNames)) {
+            alert('Bu dosya bir yedek dosyası değil, uygulamanın ilk veri dosyasına benziyor. Lütfen "Ayarlar > Veri Yönetimi" menüsünden oluşturduğunuz bir yedek (.json) dosyasını seçin. Uygulamayı ilk haline getirmek isterseniz "Uygulama Verilerini Sıfırla" düğmesini kullanabilirsiniz.');
           }
-      };
-      reader.onerror = () => {
-          alert("Dosya okunurken bir hata oluştu.");
-      };
-      reader.readAsText(file);
-  }, [saveTopics]);
+          else {
+            alert('Yedek dosyası geçersiz veya bozuk. Lütfen doğru formatta bir yedek dosyası seçtiğinizden emin olun. (İçerik yapısı hatalı: "appTopics" alanı bulunamadı.)');
+          }
+        } else {
+             alert('Dosya içeriği okunamadı. Lütfen geçerli bir metin tabanlı yedek (.json) dosyası seçin.');
+        }
+      } catch (e) {
+        console.error("Restore error:", e);
+        alert('Yedek dosyası okunurken bir hata oluştu. Dosyanın JSON formatında ve bozuk olmadığından emin olun.');
+      }
+    };
+    reader.readAsText(file);
+};
+
+const handleConfirmRestore = () => {
+    if (!restoreData) return;
+
+    try {
+        localStorage.setItem('appTopics', JSON.stringify(restoreData.topics));
+        localStorage.setItem('appDataVersion', restoreData.version.toString());
+
+        setTopics(restoreData.topics);
+        setInitialTopics(restoreData.topics);
+
+        setIsRestoreSummaryModalOpen(false);
+        setRestoreData(null);
+
+        alert('Veriler başarıyla geri yüklendi!');
+        setCurrentView('home');
+        
+    } catch (error) {
+        console.error("Geri yükleme sırasında localStorage'a yazma hatası:", error);
+        alert(
+            "Geri yükleme başarısız oldu. Veriler tarayıcınızın deposuna kaydedilemedi. " +
+            "Depolama alanınız dolu olabilir veya tarayıcınız depolamayı engelliyor olabilir."
+        );
+        setIsRestoreSummaryModalOpen(false);
+        setRestoreData(null);
+    }
+};
+
+const handleCancelRestore = () => {
+    setIsRestoreSummaryModalOpen(false);
+    setRestoreData(null);
+};
+
+const handleAddBulkQuestions = (topicId: string, newQuestions: Question[]) => {
+    setTopics(prevTopics =>
+        prevTopics.map(topic =>
+            topic.id === topicId
+                ? { ...topic, questions: [...topic.questions, ...newQuestions] }
+                : topic
+        )
+    );
+};
+
+const handleAddBulkFlashcards = (topicId: string, newCards: Array<Omit<Flashcard, 'id'>>) => {
+    setTopics(prevTopics =>
+      prevTopics.map(topic => {
+        if (topic.id === topicId) {
+          const newFlashcards = newCards.map((card, index) => ({
+            ...card,
+            id: Date.now() + index
+          }));
+          return { ...topic, flashcards: [...topic.flashcards, ...newFlashcards] };
+        }
+        return topic;
+      })
+    );
+};
+
+const handleUpdateBulkFlashcards = (topicId: string, newCards: Array<Omit<Flashcard, 'id'>>) => {
+    setTopics(prevTopics =>
+      prevTopics.map(topic => {
+        if (topic.id === topicId) {
+          const newFlashcards = newCards.map((card, index) => ({
+            ...card,
+            id: Date.now() + index
+          }));
+          return { ...topic, flashcards: newFlashcards };
+        }
+        return topic;
+      })
+    );
+};
+
+
+const handleEditFlashcard = (topicId: string, cardId: number, updatedCard: Omit<Flashcard, 'id'>) => {
+    setTopics(prevTopics =>
+      prevTopics.map(topic => {
+        if (topic.id === topicId) {
+          return {
+            ...topic,
+            flashcards: topic.flashcards.map(card =>
+              card.id === cardId ? { ...card, ...updatedCard } : card
+            ),
+          };
+        }
+        return topic;
+      })
+    );
+};
+
+const handleAddFlashcard = (topicId: string, newCardData: Omit<Flashcard, 'id'>) => {
+  setTopics(prevTopics =>
+    prevTopics.map(topic => {
+      if(topic.id === topicId) {
+        const newCard: Flashcard = {
+          ...newCardData,
+          id: Date.now(),
+        };
+        return { ...topic, flashcards: [...topic.flashcards, newCard] };
+      }
+      return topic;
+    })
+  )
+}
+
+const handleDeleteFlashcard = (topicId: string, cardId: number) => {
+    setTopics(prevTopics =>
+      prevTopics.map(topic => {
+        if (topic.id === topicId) {
+          return {
+            ...topic,
+            flashcards: topic.flashcards.filter(card => card.id !== cardId),
+          };
+        }
+        return topic;
+      })
+    );
+};
+
+const handleSyncData = async () => {
+    if (!window.confirm("Soru bankasını en güncel haliyle senkronize etmek istediğinizden emin misiniz? Bu işlem, mevcut konuların sorularını ve özetlerini günceller. Sizin eklediğiniz özel konular ve notlar korunacaktır.")) {
+        return;
+    }
+    // This function will effectively re-run the migration logic
+    localStorage.setItem('appDataVersion', '0'); // Force migration
+    window.location.reload();
+};
+
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white">
-        <svg className="animate-spin h-10 w-10 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <p className="mt-4 text-lg">Veriler Yükleniyor...</p>
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-xl text-slate-400">Yükleniyor...</div>
       </div>
     );
   }
 
-  const renderContent = () => {
+  const mainContent = () => {
     switch (currentView) {
-      case 'quiz':
-        return selectedTopic && <QuizView 
-            topic={selectedTopic} 
-            onQuizComplete={handleQuizComplete} 
-            onBack={handleBackToTopics} 
-            onBackToHome={handleBackToHome} 
-            onDeleteQuestion={handleDeleteQuestion}
-            onEditQuestion={handleEditQuestion}
-            onUpdateQuestionNote={handleUpdateQuestionNote}
-            isMobileLayout={isMobileLayout} />;
-      case 'results':
-        return selectedTopic && <ResultsView 
-            score={finalScore} 
-            totalQuestions={selectedTopic.questions.length} 
-            onBackToTopics={handleBackToTopics} 
-            onBackToHome={handleBackToHome} 
-            isMobileLayout={isMobileLayout} 
-            previousScore={previousScore}
-        />;
       case 'topicSelection':
         return <TopicSelection 
-            topics={topics} 
-            onSelectTopic={handleTopicSelect} 
-            onBack={handleBackToHome} 
-            onOpenAddQuestionModal={handleOpenAddQuestionModal} 
-            onOpenViewQuestionsModal={handleOpenViewQuestionsModal}
-            onOpenEditTopicModal={handleOpenEditTopicModal}
-            onDeleteTopic={handleDeleteTopic}
-            onAddNewTopic={handleOpenAddTopicModal}
-            onToggleFavorite={handleToggleFavorite}
-            availableIcons={availableIcons}
-            isMobileLayout={isMobileLayout}
-            onSyncData={handleSyncData}
-        />;
-      case 'summaries':
-        return <SummariesView 
-                    onBack={handleBackToHome} 
                     topics={topics} 
+                    onSelectTopic={handleSelectTopic} 
+                    onBack={handleBackToHome} 
+                    onOpenAddQuestionModal={handleOpenAddQuestionModal}
+                    onOpenViewQuestionsModal={handleOpenViewQuestionsModal}
+                    onOpenEditTopicModal={handleOpenEditTopicModal}
+                    onDeleteTopic={handleDeleteTopic}
+                    onAddNewTopic={handleAddNewTopic}
+                    onToggleFavorite={handleToggleFavorite}
+                    availableIcons={availableIcons}
+                    isMobileLayout={isMobileLayout}
+                    onSyncData={handleSyncData}
+                />;
+      case 'quiz':
+        return selectedTopic && <QuizView 
+                                    topic={selectedTopic} 
+                                    onQuizComplete={handleQuizComplete} 
+                                    onBack={handleBackToTopics} 
+                                    onBackToHome={handleBackToHome}
+                                    onDeleteQuestion={handleDeleteQuestion}
+                                    onEditQuestion={handleEditQuestion}
+                                    isMobileLayout={isMobileLayout}
+                                    onUpdateQuestionNote={handleUpdateQuestionNote}
+                                />;
+      case 'results':
+        return selectedTopic && <ResultsView 
+                                    score={quizScore} 
+                                    totalQuestions={selectedTopic.questions.length} 
+                                    onBackToTopics={handleBackToTopics} 
+                                    onBackToHome={handleBackToHome}
+                                    isMobileLayout={isMobileLayout}
+                                    previousScore={previousScore}
+                                />;
+      case 'summaries':
+        return <SummariesView
+                    onBack={handleBackToHome}
+                    topics={topics}
                     onUpdateSummary={handleUpdateSummary}
-                    onAddNewTopic={handleOpenAddTopicModal}
+                    onAddNewTopic={handleAddNewTopic}
                     onOpenEditTopicModal={handleOpenEditTopicModal}
                     onDeleteTopic={handleDeleteTopic}
                     onToggleFavorite={handleToggleFavorite}
@@ -715,113 +674,109 @@ const App: React.FC = () => {
                 />;
       case 'bilgiKartlari':
         return <FlashcardsView 
-            onBack={handleBackToHome} 
-            topics={topics} 
-            isMobileLayout={isMobileLayout}
-            onEditFlashcard={handleEditFlashcard}
-            onDeleteFlashcard={handleDeleteFlashcard}
-            onAddNewTopic={handleOpenAddTopicModal}
-            onOpenEditTopicModal={handleOpenEditTopicModal}
-            onDeleteTopic={handleDeleteTopic}
-            onToggleFavorite={handleToggleFavorite}
-            availableIcons={availableIcons}
-            onOpenBulkAddModal={handleOpenBulkAddModal}
-            onOpenBulkUpdateModal={handleOpenBulkUpdateModal}
-            onOpenManageCardsModal={handleOpenManageCardsModal}
-        />;
+                    onBack={handleBackToHome}
+                    topics={topics}
+                    isMobileLayout={isMobileLayout}
+                    onEditFlashcard={handleEditFlashcard}
+                    onDeleteFlashcard={handleDeleteFlashcard}
+                    onAddNewTopic={handleAddNewTopic}
+                    onOpenEditTopicModal={handleOpenEditTopicModal}
+                    onDeleteTopic={handleDeleteTopic}
+                    onToggleFavorite={handleToggleFavorite}
+                    availableIcons={availableIcons}
+                    onOpenBulkAddModal={(topic) => { setTopicForModal(topic); setIsBulkAddFlashcardsModalOpen(true); }}
+                    onOpenBulkUpdateModal={(topic) => { setTopicForModal(topic); setIsBulkUpdateFlashcardsModalOpen(true); }}
+                    onOpenManageCardsModal={(topic) => { setTopicForModal(topic); setIsManageFlashcardsModalOpen(true); }}
+                />;
       case 'settings':
         return <SettingsView 
-            onBack={handleBackToHome} 
-            topics={topics}
-            onEditQuestion={handleEditQuestion}
-            onDeleteQuestion={handleDeleteQuestion}
-            onAddNewQuestion={handleAddNewQuestion}
-            isMobileLayout={isMobileLayout}
-            onToggleMobileLayout={handleToggleMobileLayout}
-            onResetData={handleResetData}
-            onBackupData={handleBackupData}
-            onRestoreData={handleRestoreData}
-        />;
+                    onBack={handleBackToHome}
+                    topics={topics}
+                    onEditQuestion={handleEditQuestion}
+                    onDeleteQuestion={handleDeleteQuestion}
+                    onAddNewQuestion={handleAddQuestion}
+                    isMobileLayout={isMobileLayout}
+                    onToggleMobileLayout={handleToggleMobileLayout}
+                    onResetData={handleResetData}
+                    onBackupData={handleBackupData}
+                    onRestoreData={handleRestoreData}
+                />;
       case 'home':
       default:
         return <HomeSelection 
-            onSelectSorular={() => setCurrentView('topicSelection')}
-            onSelectKonuOzetleri={() => setCurrentView('summaries')}
-            onSelectBilgiKartlari={() => setCurrentView('bilgiKartlari')}
-            onSelectAyarlar={() => setCurrentView('settings')}
-            isMobileLayout={isMobileLayout}
-        />;
+                    onSelectSorular={() => setCurrentView('topicSelection')} 
+                    onSelectKonuOzetleri={() => setCurrentView('summaries')}
+                    onSelectBilgiKartlari={() => setCurrentView('bilgiKartlari')}
+                    onSelectAyarlar={() => setCurrentView('settings')}
+                    isMobileLayout={isMobileLayout}
+                />;
     }
   };
-  
-  const backgroundClass = currentView === 'bilgiKartlari' 
-    ? 'bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900' 
-    : 'bg-slate-900';
-
-  const topicToViewQuestions = isViewQuestionsModalOpen && topicToViewQuestionsId
-    ? topics.find(t => t.id === topicToViewQuestionsId)
-    : null;
-    
-  const topicToManageCards = isManageCardsModalOpen && topicToManageCardsId
-    ? topics.find(t => t.id === topicToManageCardsId)
-    : null;
 
   return (
-    <div className={`min-h-screen ${backgroundClass} flex flex-col items-center justify-center p-4 transition-colors duration-500`}>
-      <main className={`w-full ${isMobileLayout ? 'max-w-md' : 'max-w-4xl'} mx-auto`}>
-        {renderContent()}
+    <div className={`container mx-auto p-4 md:p-8 flex items-center justify-center min-h-screen ${isMobileLayout ? 'max-w-md' : 'max-w-5xl'}`}>
+      <main className="w-full">
+        {mainContent()}
       </main>
-      <SaveStatusToast status={saveStatus} onIdle={() => setSaveStatus('idle')} />
-      {isAddQuestionModalOpen && topicToAddTo && (
-        <AddQuestionModal 
-          topic={topicToAddTo}
-          onClose={handleCloseAddQuestionModal}
-          onAddQuestion={handleAddNewQuestion}
+      {isAddQuestionModalOpen && topicForModal && (
+        <AddQuestionModal
+          topic={topicForModal}
+          onClose={() => setIsAddQuestionModalOpen(false)}
+          onAddQuestion={handleAddQuestion}
         />
       )}
-      {topicToViewQuestions && (
+      {isViewQuestionsModalOpen && topicForModal && (
         <ViewQuestionsModal
-            topic={topicToViewQuestions}
-            onClose={handleCloseViewQuestionsModal}
-            onEditQuestion={(updatedQuestion) => handleEditQuestion(topicToViewQuestions.id, updatedQuestion)}
-            onDeleteQuestion={(questionId) => handleDeleteQuestion(topicToViewQuestions.id, questionId)}
-            onAddBulkQuestions={handleAddNewBulkQuestions}
-            onOpenAddQuestionModal={handleOpenAddQuestionModal}
+          topic={topicForModal}
+          onClose={() => setIsViewQuestionsModalOpen(false)}
+          onEditQuestion={(updatedQuestion) => handleEditQuestion(topicForModal.id, updatedQuestion)}
+          onDeleteQuestion={(questionId) => handleDeleteQuestion(topicForModal.id, questionId)}
+          onAddBulkQuestions={handleAddBulkQuestions}
+          onOpenAddQuestionModal={handleOpenAddQuestionModal}
         />
       )}
-      {isEditTopicModalOpen && topicToEdit && (
+       {isEditTopicModalOpen && topicForModal && (
         <EditTopicModal
-          topic={topicToEdit}
-          onClose={handleCloseEditTopicModal}
+          topic={topicForModal}
+          onClose={() => setIsEditTopicModalOpen(false)}
           onSave={handleSaveTopic}
           availableIcons={availableIcons}
           availableColorPalettes={availableColorPalettes}
         />
       )}
-      {isBulkAddModalOpen && topicToBulkAddTo && (
-        <BulkAddFlashcardsModal
-            topic={topicToBulkAddTo}
-            onClose={handleCloseBulkAddModal}
-            onSave={handleBulkAddFlashcards}
+      {isBulkAddFlashcardsModalOpen && topicForModal && (
+          <BulkAddFlashcardsModal
+            topic={topicForModal}
+            onClose={() => setIsBulkAddFlashcardsModalOpen(false)}
+            onSave={handleAddBulkFlashcards}
+          />
+      )}
+      {isBulkUpdateFlashcardsModalOpen && topicForModal && (
+          <BulkUpdateFlashcardsModal
+            topic={topicForModal}
+            onClose={() => setIsBulkUpdateFlashcardsModalOpen(false)}
+            onSave={handleUpdateBulkFlashcards}
+          />
+      )}
+      {isManageFlashcardsModalOpen && topicForModal && (
+          <ManageFlashcardsModal
+            topic={topicForModal}
+            onClose={() => setIsManageFlashcardsModalOpen(false)}
+            onEditFlashcard={(cardId, updatedCard) => handleEditFlashcard(topicForModal.id, cardId, updatedCard)}
+            onDeleteFlashcard={(cardId) => handleDeleteFlashcard(topicForModal.id, cardId)}
+            onAddFlashcard={(newCardData) => handleAddFlashcard(topicForModal.id, newCardData)}
+            onAddBulkFlashcards={handleAddBulkFlashcards}
+          />
+      )}
+      {isRestoreSummaryModalOpen && restoreData && (
+        <RestoreSummaryModal
+          currentTopics={topics}
+          restoredData={restoreData}
+          onConfirm={handleConfirmRestore}
+          onCancel={handleCancelRestore}
         />
       )}
-      {isBulkUpdateModalOpen && topicToBulkUpdate && (
-        <BulkUpdateFlashcardsModal
-            topic={topicToBulkUpdate}
-            onClose={handleCloseBulkUpdateModal}
-            onSave={handleBulkUpdateFlashcards}
-        />
-      )}
-      {topicToManageCards && (
-        <ManageFlashcardsModal
-          topic={topicToManageCards}
-          onClose={handleCloseManageCardsModal}
-          onEditFlashcard={(cardId, updatedCard) => handleEditFlashcard(topicToManageCards.id, cardId, updatedCard)}
-          onDeleteFlashcard={(cardId) => handleDeleteFlashcard(topicToManageCards.id, cardId)}
-          onAddFlashcard={(newCardData) => handleAddNewFlashcard(topicToManageCards.id, newCardData)}
-          onAddBulkFlashcards={handleBulkAddFlashcards}
-        />
-      )}
+      <SaveStatusToast status={saveStatus} onIdle={onIdle} />
     </div>
   );
 };
