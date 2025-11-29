@@ -39,10 +39,19 @@ const EditableQuestionForm: React.FC<EditableQuestionFormProps> = ({ question, o
   }
 
   const handleSave = () => {
-    if (!questionText.trim() || options.some(opt => !opt.trim())) {
-        alert("Soru metni ve tüm seçenekler doldurulmalıdır.");
+    if (!questionText.trim()) {
+        alert("Soru metni boş olamaz.");
         return;
     }
+    if (options.some(opt => !opt.trim())) {
+        alert("Tüm seçenekler doldurulmalıdır.");
+        return;
+    }
+    if (correctAnswerIndex === null || correctAnswerIndex < 0 || correctAnswerIndex >= options.length) {
+        alert("Doğru cevap seçilmelidir.");
+        return;
+    }
+
     const updatedQuestion: Question = {
       ...question,
       questionText,

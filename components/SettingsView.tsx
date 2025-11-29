@@ -19,7 +19,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [selectedTopicId, setSelectedTopicId] = useState<string>(topics[0]?.id || '');
   
   const [newQuestionText, setNewQuestionText] = useState('');
-  const [newOptions, setNewOptions] = useState(['', '', '', '']);
+  const [newOptions, setNewOptions] = useState(['', '', '', '', '']); // Default to 5 options
   const [newCorrectAnswerIndex, setNewCorrectAnswerIndex] = useState<number | null>(null);
   const [addError, setAddError] = useState('');
   const [addSuccess, setAddSuccess] = useState('');
@@ -49,7 +49,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         setAddError('Tüm seçenekler doldurulmalıdır.');
         return;
     }
-    if (newCorrectAnswerIndex === null) {
+    if (newCorrectAnswerIndex === null || newCorrectAnswerIndex < 0 || newCorrectAnswerIndex >= newOptions.length) {
         setAddError('Doğru cevap seçilmelidir.');
         return;
     }
@@ -65,7 +65,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
     // Reset form and show success message
     setNewQuestionText('');
-    setNewOptions(['', '', '', '']);
+    setNewOptions(['', '', '', '', '']); // Reset to 5 options
     setNewCorrectAnswerIndex(null);
     setAddError('');
     setAddSuccess('Soru başarıyla eklendi! Yeni bir tane daha ekleyebilirsiniz.');

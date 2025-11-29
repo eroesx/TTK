@@ -9,14 +9,14 @@ interface AddQuestionModalProps {
 
 const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onAddQuestion }) => {
   const [questionText, setQuestionText] = useState('');
-  const [options, setOptions] = useState(['', '', '', '']);
+  const [options, setOptions] = useState(['', '', '', '', '']); // Default to 5 options
   const [correctAnswerIndex, setCorrectAnswerIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
   const resetForm = () => {
     setQuestionText('');
-    setOptions(['', '', '', '']);
+    setOptions(['', '', '', '', '']); // Reset to 5 options
     setCorrectAnswerIndex(null);
     setError('');
   };
@@ -40,7 +40,7 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onA
       setError('Tüm seçenekler doldurulmalıdır.');
       return;
     }
-    if (correctAnswerIndex === null) {
+    if (correctAnswerIndex === null || correctAnswerIndex < 0 || correctAnswerIndex >= options.length) {
       setError('Doğru cevap seçilmelidir.');
       return;
     }
