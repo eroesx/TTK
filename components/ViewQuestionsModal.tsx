@@ -91,18 +91,17 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
         const newQuestions: Question[] = [];
         for (let i = 0; i < parsedData.length; i++) {
           const item = parsedData[i];
-          // Allow questions with minimum 4 options. Max options can be anything.
           if (
             typeof item.questionText !== 'string' || !item.questionText.trim() ||
             !Array.isArray(item.options) ||
-            item.options.length < 4 || // At least 4 options are required
+            item.options.length !== 4 ||
             !item.options.every((opt: any) => typeof opt === 'string' && opt.trim()) ||
             typeof item.correctAnswerIndex !== 'number' ||
             !Number.isInteger(item.correctAnswerIndex) ||
             item.correctAnswerIndex < 0 ||
-            item.correctAnswerIndex >= item.options.length // Correct answer index must be within the provided options
+            item.correctAnswerIndex > 3
           ) {
-            throw new Error(`Dosyadaki ${i + 1}. sıradaki soru formatı geçersiz. Her soru metni, en az 4 seçeneği ve doğru cevap indeksi içermelidir.`);
+            throw new Error(`Dosyadaki ${i + 1}. sıradaki soru formatı geçersiz. Lütfen şablonu kontrol edin.`);
           }
           newQuestions.push({
             id: Date.now() + i,
@@ -157,8 +156,8 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
   }, [topic.questions, searchTerm]);
 
   const handleAddNewQuestionClick = () => {
-    onOpenAddQuestionModal(topic); // Pass the current topic to the AddQuestionModal
-    onClose(); // Close this modal after opening the AddQuestionModal
+    onOpenAddQuestionModal(topic);
+    onClose();
   };
 
   return (

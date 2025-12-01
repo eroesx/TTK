@@ -13,7 +13,6 @@ const EditQuestionModal: React.FC<EditQuestionModalProps> = ({ question, onSave,
 
   useEffect(() => {
     setEditedQuestion(question);
-    setError(''); // Clear error on new question load
   }, [question]);
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -32,7 +31,6 @@ const EditQuestionModal: React.FC<EditQuestionModalProps> = ({ question, onSave,
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     if (!editedQuestion.questionText.trim()) {
       setError('Soru metni boş olamaz.');
       return;
@@ -41,11 +39,6 @@ const EditQuestionModal: React.FC<EditQuestionModalProps> = ({ question, onSave,
       setError('Tüm seçenekler doldurulmalıdır.');
       return;
     }
-    if (editedQuestion.correctAnswerIndex === null || editedQuestion.correctAnswerIndex < 0 || editedQuestion.correctAnswerIndex >= editedQuestion.options.length) {
-        setError('Doğru cevap seçilmelidir.');
-        return;
-    }
-
     onSave(editedQuestion);
     onClose();
   };
