@@ -1,5 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import type { Question } from '../types';
+import TrashIcon from './icons/TrashIcon';
+import AddIcon from './icons/AddIcon';
 
 interface EditQuestionModalProps {
   question: Question;
@@ -27,6 +30,38 @@ const EditQuestionModal: React.FC<EditQuestionModalProps> = ({ question, onSave,
 
   const handleCorrectAnswerChange = (index: number) => {
     setEditedQuestion({ ...editedQuestion, correctAnswerIndex: index });
+  };
+
+  const handleAddOption = () => {
+    if (editedQuestion.options.length < 5) {
+      setEditedQuestion({
+        ...editedQuestion,
+        options: [...editedQuestion.options, '']
+      });
+    }
+  };
+
+  const handleRemoveOption = (indexToRemove: number) => {
+    if (editedQuestion.options.length <= 2) return;
+
+    const newOptions = editedQuestion.options.filter((_, i) => i !== indexToRemove);
+    let newCorrectIndex = editedQuestion.correctAnswerIndex;
+
+    // Reset correct answer if it's the one being removed
+    // Shift index if removed option was before correct answer
+    if (newCorrectIndex === indexToRemove) {
+      // Invalidate logic: set to 0 as default or stay invalid? Let's default to 0 to avoid errors, user must check.
+      // Better: check on save.
+      newCorrectIndex = 0; 
+    } else if (newCorrectIndex > indexToRemove) {
+      newCorrectIndex = newCorrectIndex - 1;
+    }
+
+    setEditedQuestion({
+      ...editedQuestion,
+      options: newOptions,
+      correctAnswerIndex: newCorrectIndex
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -91,9 +126,29 @@ const EditQuestionModal: React.FC<EditQuestionModalProps> = ({ question, onSave,
                             className="w-full bg-slate-900 border border-slate-700 rounded-md p-3 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
                             placeholder={`Seçenek ${index + 1}`}
                         />
+                        {editedQuestion.options.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveOption(index)}
+                            className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                            title="Seçeneği Sil"
+                          >
+                            <TrashIcon />
+                          </button>
+                        )}
                     </div>
                 ))}
              </div>
+             {editedQuestion.options.length < 5 && (
+                <button
+                    type="button"
+                    onClick={handleAddOption}
+                    className="mt-3 flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors font-medium"
+                >
+                    <AddIcon className="h-4 w-4" />
+                    Seçenek Ekle
+                </button>
+             )}
           </div>
 
           {error && <p className="text-red-400 text-sm">{error}</p>}

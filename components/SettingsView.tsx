@@ -1,8 +1,11 @@
+
 import React, { useState, useRef } from 'react';
 import type { SettingsViewProps, Question } from '../types';
 import EditableQuestionForm from './EditableQuestionForm';
 import DownloadIcon from './icons/DownloadIcon';
 import UploadIcon from './icons/UploadIcon';
+import TrashIcon from './icons/TrashIcon';
+import AddIcon from './icons/AddIcon';
 
 const SettingsView: React.FC<SettingsViewProps> = ({ 
   onBack, 
@@ -19,7 +22,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [selectedTopicId, setSelectedTopicId] = useState<string>(topics[0]?.id || '');
   
   const [newQuestionText, setNewQuestionText] = useState('');
-  const [newOptions, setNewOptions] = useState(['', '', '', '']);
+  const [newOptions, setNewOptions] = useState(['', '']); // Default 2 options
   const [newCorrectAnswerIndex, setNewCorrectAnswerIndex] = useState<number | null>(null);
   const [addError, setAddError] = useState('');
   const [addSuccess, setAddSuccess] = useState('');
@@ -32,6 +35,25 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     const updatedOptions = [...newOptions];
     updatedOptions[index] = value;
     setNewOptions(updatedOptions);
+  };
+
+  const handleAddNewOption = () => {
+    if (newOptions.length < 5) {
+      setNewOptions([...newOptions, '']);
+    }
+  };
+
+  const handleRemoveNewOption = (indexToRemove: number) => {
+    if (newOptions.length <= 2) return;
+
+    const updatedOptions = newOptions.filter((_, i) => i !== indexToRemove);
+    setNewOptions(updatedOptions);
+
+    if (newCorrectAnswerIndex === indexToRemove) {
+      setNewCorrectAnswerIndex(null);
+    } else if (newCorrectAnswerIndex !== null && newCorrectAnswerIndex > indexToRemove) {
+      setNewCorrectAnswerIndex(newCorrectAnswerIndex - 1);
+    }
   };
 
   const handleAddNewQuestionSubmit = (e: React.FormEvent) => {
@@ -65,7 +87,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
     // Reset form and show success message
     setNewQuestionText('');
-    setNewOptions(['', '', '', '']);
+    setNewOptions(['', '']);
     setNewCorrectAnswerIndex(null);
     setAddError('');
     setAddSuccess('Soru başarıyla eklendi! Yeni bir tane daha ekleyebilirsiniz.');
@@ -242,9 +264,29 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       className="w-full bg-slate-800 border border-slate-600 rounded-md p-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
                       placeholder={`Seçenek ${index + 1}`}
                     />
+                    {newOptions.length > 2 && (
+                        <button
+                        type="button"
+                        onClick={() => handleRemoveNewOption(index)}
+                        className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                        title="Seçeneği Sil"
+                        >
+                        <TrashIcon />
+                        </button>
+                    )}
                   </div>
                 ))}
               </div>
+              {newOptions.length < 5 && (
+                <button
+                    type="button"
+                    onClick={handleAddNewOption}
+                    className="mt-3 flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors font-medium"
+                >
+                    <AddIcon className="h-4 w-4" />
+                    Seçenek Ekle
+                </button>
+              )}
             </div>
             {addError && <p className="text-red-400 text-sm">{addError}</p>}
             {addSuccess && <p className="text-green-400 text-sm">{addSuccess}</p>}

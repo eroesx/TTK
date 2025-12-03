@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import type { Question } from '../types';
 import TrashIcon from './icons/TrashIcon';
+import AddIcon from './icons/AddIcon';
 
 interface EditableQuestionFormProps {
   question: Question;
@@ -37,6 +39,27 @@ const EditableQuestionForm: React.FC<EditableQuestionFormProps> = ({ question, o
     setCorrectAnswerIndex(index);
     setIsDirty(true);
   }
+
+  const handleAddOption = () => {
+    if (options.length < 5) {
+      setOptions([...options, '']);
+      setIsDirty(true);
+    }
+  };
+
+  const handleRemoveOption = (indexToRemove: number) => {
+    if (options.length <= 2) return;
+
+    const newOptions = options.filter((_, i) => i !== indexToRemove);
+    setOptions(newOptions);
+
+    if (correctAnswerIndex === indexToRemove) {
+      setCorrectAnswerIndex(0); // Reset to first option if selected is removed
+    } else if (correctAnswerIndex > indexToRemove) {
+      setCorrectAnswerIndex(correctAnswerIndex - 1);
+    }
+    setIsDirty(true);
+  };
 
   const handleSave = () => {
     if (!questionText.trim() || options.some(opt => !opt.trim())) {
@@ -88,9 +111,27 @@ const EditableQuestionForm: React.FC<EditableQuestionFormProps> = ({ question, o
                 onChange={(e) => handleOptionChange(index, e.target.value)}
                 className="w-full bg-slate-800 border border-slate-600 rounded-md p-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
               />
+              {options.length > 2 && (
+                <button
+                  onClick={() => handleRemoveOption(index)}
+                  className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                  title="Seçeneği Sil"
+                >
+                  <TrashIcon />
+                </button>
+              )}
             </div>
           ))}
         </div>
+        {options.length < 5 && (
+            <button
+                onClick={handleAddOption}
+                className="mt-3 flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors font-medium"
+            >
+                <AddIcon className="h-4 w-4" />
+                Seçenek Ekle
+            </button>
+        )}
       </div>
       <div className="flex justify-end items-center gap-3">
         <button 

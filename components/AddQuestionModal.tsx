@@ -1,5 +1,8 @@
+
 import React, { useState } from 'react';
 import type { Topic, Question } from '../types';
+import TrashIcon from './icons/TrashIcon';
+import AddIcon from './icons/AddIcon';
 
 interface AddQuestionModalProps {
   topic: Topic;
@@ -9,14 +12,14 @@ interface AddQuestionModalProps {
 
 const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onAddQuestion }) => {
   const [questionText, setQuestionText] = useState('');
-  const [options, setOptions] = useState(['', '', '', '']);
+  const [options, setOptions] = useState(['', '']); // Start with 2 options
   const [correctAnswerIndex, setCorrectAnswerIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
   const resetForm = () => {
     setQuestionText('');
-    setOptions(['', '', '', '']);
+    setOptions(['', '']);
     setCorrectAnswerIndex(null);
     setError('');
   };
@@ -25,6 +28,26 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onA
     const newOptions = [...options];
     newOptions[index] = value;
     setOptions(newOptions);
+  };
+
+  const handleAddOption = () => {
+    if (options.length < 5) {
+      setOptions([...options, '']);
+    }
+  };
+
+  const handleRemoveOption = (indexToRemove: number) => {
+    if (options.length <= 2) return;
+
+    const newOptions = options.filter((_, i) => i !== indexToRemove);
+    setOptions(newOptions);
+
+    // Adjust correct answer index
+    if (correctAnswerIndex === indexToRemove) {
+      setCorrectAnswerIndex(null);
+    } else if (correctAnswerIndex !== null && correctAnswerIndex > indexToRemove) {
+      setCorrectAnswerIndex(correctAnswerIndex - 1);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -64,7 +87,7 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onA
         onClick={onClose}
     >
       <div 
-        className="bg-slate-800 rounded-2xl p-8 w-full max-w-2xl shadow-2xl relative"
+        className="bg-slate-800 rounded-2xl p-8 w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
@@ -96,7 +119,7 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onA
                             id={`option-${index}`}
                             checked={correctAnswerIndex === index}
                             onChange={() => setCorrectAnswerIndex(index)}
-                            className="h-4 w-4 text-cyan-600 bg-slate-700 border-slate-600 focus:ring-cyan-500"
+                            className="h-4 w-4 text-cyan-600 bg-slate-700 border-slate-600 focus:ring-cyan-500 shrink-0"
                         />
                         <input
                             type="text"
@@ -105,9 +128,29 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onA
                             className="w-full bg-slate-900 border border-slate-700 rounded-md p-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
                             placeholder={`Seçenek ${index + 1}`}
                         />
+                        {options.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveOption(index)}
+                            className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                            title="Seçeneği Sil"
+                          >
+                            <TrashIcon />
+                          </button>
+                        )}
                     </div>
                 ))}
              </div>
+             {options.length < 5 && (
+               <button
+                 type="button"
+                 onClick={handleAddOption}
+                 className="mt-3 flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors font-medium"
+               >
+                 <AddIcon className="h-4 w-4" />
+                 Seçenek Ekle
+               </button>
+             )}
           </div>
           
           <div className="min-h-[20px] text-sm text-center">

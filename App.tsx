@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Topic, Question, Flashcard } from './types';
 import { availableIcons, availableColorPalettes, DATA_VERSION, quizData } from './data/quizData';

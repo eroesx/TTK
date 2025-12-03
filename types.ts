@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export interface Question {
@@ -106,6 +107,7 @@ export interface SummariesViewProps extends MobileLayoutProps {
   onDeleteTopic: (topicId: string) => void;
   onToggleFavorite: (topicId: string) => void;
   availableIcons: { name: string, component: React.ReactNode }[];
+  isMobileLayout: boolean;
 }
 
 
