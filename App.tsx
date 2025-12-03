@@ -530,6 +530,16 @@ const handleAddBulkQuestions = (topicId: string, newQuestions: Question[]) => {
     );
 };
 
+const handleReplaceQuestions = (topicId: string, newQuestions: Question[]) => {
+    setTopics(prevTopics =>
+        prevTopics.map(topic =>
+            topic.id === topicId
+                ? { ...topic, questions: newQuestions }
+                : topic
+        )
+    );
+};
+
 const handleAddBulkFlashcards = (topicId: string, newCards: Array<Omit<Flashcard, 'id'>>) => {
     setTopics(prevTopics =>
       prevTopics.map(topic => {
@@ -733,6 +743,7 @@ const handleSyncData = async () => {
           onEditQuestion={(updatedQuestion) => handleEditQuestion(topicForModal.id, updatedQuestion)}
           onDeleteQuestion={(questionId) => handleDeleteQuestion(topicForModal.id, questionId)}
           onAddBulkQuestions={handleAddBulkQuestions}
+          onReplaceQuestions={handleReplaceQuestions}
           onOpenAddQuestionModal={handleOpenAddQuestionModal}
         />
       )}

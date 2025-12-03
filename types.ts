@@ -61,6 +61,7 @@ export interface ViewQuestionsModalProps {
   onEditQuestion: (updatedQuestion: Question) => void;
   onDeleteQuestion: (questionId: number) => void;
   onAddBulkQuestions: (topicId: string, newQuestions: Question[]) => void;
+  onReplaceQuestions: (topicId: string, newQuestions: Question[]) => void;
   onOpenAddQuestionModal: (topic: Topic) => void;
 }
 

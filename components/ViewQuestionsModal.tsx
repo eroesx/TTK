@@ -13,10 +13,11 @@ import PasteIcon from './icons/PasteIcon';
 import PrinterIcon from './icons/PrinterIcon';
 import BulkAddQuestionsModal from './BulkAddQuestionsModal';
 
-const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose, onEditQuestion, onDeleteQuestion, onAddBulkQuestions, onOpenAddQuestionModal }) => {
+const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose, onEditQuestion, onDeleteQuestion, onAddBulkQuestions, onReplaceQuestions, onOpenAddQuestionModal }) => {
   const [questionToEdit, setQuestionToEdit] = useState<Question | null>(null);
   const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [pendingImportQuestions, setPendingImportQuestions] = useState<Question[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Print States
@@ -126,10 +127,8 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
             return;
         }
 
-        if (window.confirm(`${newQuestions.length} adet soru bu konuya eklenecek. Onaylıyor musunuz?`)) {
-          onAddBulkQuestions(topic.id, newQuestions);
-          alert(`${newQuestions.length} soru başarıyla eklendi.`);
-        }
+        setPendingImportQuestions(newQuestions);
+
       } catch (error) {
         if (error instanceof Error) {
             alert(`Dosya işlenirken hata oluştu: ${error.message}`);
@@ -147,6 +146,28 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
         if (event.target) event.target.value = '';
     };
     reader.readAsText(file);
+  };
+
+  const handleImportAppend = () => {
+    if (pendingImportQuestions) {
+        onAddBulkQuestions(topic.id, pendingImportQuestions);
+        alert(`${pendingImportQuestions.length} soru mevcut sorulara eklendi.`);
+        setPendingImportQuestions(null);
+    }
+  };
+
+  const handleImportReplace = () => {
+    if (pendingImportQuestions) {
+        if (window.confirm("Bu işlem mevcut tüm soruları silecek ve yerine dosyadaki soruları yükleyecektir. Emin misiniz?")) {
+            onReplaceQuestions(topic.id, pendingImportQuestions);
+            alert(`Sorular güncellendi. Toplam ${pendingImportQuestions.length} soru yüklendi.`);
+            setPendingImportQuestions(null);
+        }
+    }
+  };
+
+  const handleImportCancel = () => {
+    setPendingImportQuestions(null);
   };
 
   const handlePrint = () => {
@@ -398,6 +419,45 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
           </button>
         </div>
       </div>
+
+      {/* Import Confirmation Modal */}
+      {pendingImportQuestions && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[60] animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="bg-slate-800 rounded-2xl p-8 w-full max-w-md shadow-2xl relative border border-slate-700">
+                <h3 className="text-xl font-bold text-cyan-400 mb-4 text-center">Soru Yükleme Seçeneği</h3>
+                <p className="text-slate-300 mb-6 text-center">
+                    Dosyada <strong>{pendingImportQuestions.length}</strong> adet soru bulundu.
+                    <br/><br/>
+                    Mevcut <strong>{topic.questions.length}</strong> sorunuzla nasıl işlem yapmak istersiniz?
+                </p>
+                
+                <div className="flex flex-col gap-3">
+                    <button 
+                        onClick={handleImportReplace}
+                        className="w-full px-4 py-3 rounded-lg bg-red-600/90 hover:bg-red-500 text-white font-semibold transition-colors border border-red-500/50 flex flex-col items-center"
+                    >
+                        <span>Mevcutların Üzerine Yaz</span>
+                        <span className="text-xs font-normal opacity-80 mt-1">(Eski sorular silinir, sadece yeniler kalır)</span>
+                    </button>
+                    
+                    <button 
+                        onClick={handleImportAppend}
+                        className="w-full px-4 py-3 rounded-lg bg-green-600/90 hover:bg-green-500 text-white font-semibold transition-colors border border-green-500/50 flex flex-col items-center"
+                    >
+                        <span>Mevcutlara Ekle</span>
+                        <span className="text-xs font-normal opacity-80 mt-1">(Eski sorular kalır, yeniler listenin sonuna eklenir)</span>
+                    </button>
+                    
+                    <button 
+                        onClick={handleImportCancel}
+                        className="w-full px-4 py-2 mt-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+                    >
+                        İptal
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* Print Settings Modal */}
       {isPrintSettingsOpen && (

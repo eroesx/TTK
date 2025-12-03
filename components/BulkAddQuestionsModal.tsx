@@ -12,6 +12,104 @@ const BulkAddQuestionsModal: React.FC<BulkAddQuestionsModalProps> = ({ topic, on
   const [bulkText, setBulkText] = useState('');
   const [error, setError] = useState('');
 
+  const parseInlineQuestion = (line: string, indexOffset: number): Question | null => {
+    // 1. Extract Answer at the end
+    const answerMatch = line.match(/(?:Cevap|Yanıt|Answer):\s*([A-E])\s*$/i);
+    if (!answerMatch) return null;
+
+    const answerChar = answerMatch[1].toUpperCase();
+    const correctAnswerIndex = answerChar.charCodeAt(0) - 'A'.charCodeAt(0);
+    
+    // Remove answer part from line
+    const textWithoutAnswer = line.substring(0, answerMatch.index).trim();
+
+    // 2. Extract Options
+    // We look for patterns like " A) " or " A. " to split the text
+    // The first one marks the end of the question text
+    const firstOptionMatch = textWithoutAnswer.match(/\s(A[\)\.])\s/);
+    if (!firstOptionMatch) return null;
+
+    const questionText = textWithoutAnswer.substring(0, firstOptionMatch.index).trim().replace(/^\d+[\.\)\s]+/, ''); // Remove leading numbering
+    const optionsPart = textWithoutAnswer.substring(firstOptionMatch.index || 0);
+
+    // Split by positive lookahead for option markers
+    // This splits " A) val B) val" into [" A) val", " B) val"]
+    const parts = optionsPart.split(/\s(?=[A-E][\)\.]\s)/);
+    
+    const optionsMap: { [key: string]: string } = {};
+    parts.forEach(part => {
+        const match = part.trim().match(/^([A-E])[\)\.]\s+(.*)/);
+        if (match) {
+            optionsMap[match[1]] = match[2].trim();
+        }
+    });
+
+    // Construct options array
+    const possibleOptions = ['A', 'B', 'C', 'D', 'E'];
+    const optionsArr = possibleOptions.map(char => optionsMap[char]).filter(opt => opt !== undefined);
+
+    if (optionsArr.length < 2) return null;
+    if (correctAnswerIndex >= optionsArr.length) return null; // Invalid answer index
+
+    return {
+        id: Date.now() + indexOffset,
+        questionText,
+        options: optionsArr,
+        correctAnswerIndex
+    };
+  };
+
+  const parseBlockQuestion = (lines: string[], indexOffset: number): Question | null => {
+    const answerRegex = /^(?:Cevap|Yanıt|Answer):\s*([A-E])/i;
+    const optionRegex = /^([A-E])[\)\.]\s+(.*)/i;
+
+    let questionText = '';
+    const optionsMap: {[key: string]: string} = {};
+    let correctAnswerIndex = -1;
+    const nonOptionLines: string[] = [];
+
+    // Find Answer
+    const answerLineIndex = lines.findIndex(line => answerRegex.test(line));
+    if (answerLineIndex !== -1) {
+        const match = lines[answerLineIndex].match(answerRegex);
+        if (match) {
+            correctAnswerIndex = match[1].toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+        }
+        // Remove answer line from consideration for text/options
+        lines.splice(answerLineIndex, 1);
+    } else {
+        return null; // No answer found
+    }
+
+    // Process Options and Question Text
+    lines.forEach(line => {
+        const match = line.match(optionRegex);
+        if (match) {
+            optionsMap[match[1].toUpperCase()] = match[2].trim();
+        } else {
+            nonOptionLines.push(line);
+        }
+    });
+
+    if (nonOptionLines.length > 0) {
+        nonOptionLines[0] = nonOptionLines[0].replace(/^\d+[\.\)\s]+/, '');
+        questionText = nonOptionLines.join(' ').trim();
+    }
+
+    const possibleOptions = ['A', 'B', 'C', 'D', 'E'];
+    const optionsArr = possibleOptions.map(char => optionsMap[char]).filter(opt => opt !== undefined);
+
+    if (questionText && optionsArr.length >= 2 && correctAnswerIndex !== -1 && correctAnswerIndex < optionsArr.length) {
+        return {
+            id: Date.now() + indexOffset,
+            questionText,
+            options: optionsArr,
+            correctAnswerIndex
+        };
+    }
+    return null;
+  };
+
   const handleSubmit = () => {
     setError('');
     if (!bulkText.trim()) {
@@ -19,80 +117,61 @@ const BulkAddQuestionsModal: React.FC<BulkAddQuestionsModalProps> = ({ topic, on
       return;
     }
 
-    const blocks = bulkText.trim().split(/\n\s*\n/);
+    const rawLines = bulkText.split('\n');
     const newQuestions: Question[] = [];
-    // Regex A, B, C, D, E seçeneklerini destekleyecek şekilde güncellendi
-    const optionRegex = /^([A-E])[\)\.]\s+(.*)/i;
-    const answerRegex = /^(?:Cevap|Yanıt|Answer):\s*([A-E])/i;
-
+    let buffer: string[] = [];
     let successCount = 0;
     let failCount = 0;
 
-    blocks.forEach((block, index) => {
-        if (!block.trim()) return;
+    // Helper to process the buffer as a block question
+    const processBuffer = () => {
+        if (buffer.length > 0) {
+            // Filter empty lines within the buffer
+            const cleanBuffer = buffer.map(l => l.trim()).filter(l => l);
+            if (cleanBuffer.length > 0) {
+                const q = parseBlockQuestion([...cleanBuffer], newQuestions.length); // pass copy
+                if (q) {
+                    newQuestions.push(q);
+                    successCount++;
+                } else {
+                    failCount++; // Block existed but failed parsing
+                }
+            }
+            buffer = [];
+        }
+    };
 
-        const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+    for (let i = 0; i < rawLines.length; i++) {
+        const line = rawLines[i].trim();
         
-        let questionText = '';
-        const optionsMap: {[key: string]: string} = {};
-        let correctAnswerIndex = -1;
-        const nonOptionLines: string[] = [];
-
-        // Cevabı Bul
-        const answerLineIndex = lines.findIndex(line => answerRegex.test(line));
-        if (answerLineIndex !== -1) {
-            const match = lines[answerLineIndex].match(answerRegex);
-            if (match) {
-                const char = match[1].toUpperCase();
-                correctAnswerIndex = char.charCodeAt(0) - 'A'.charCodeAt(0);
-            }
-            lines.splice(answerLineIndex, 1); // Cevap satırını çıkar
+        if (!line) {
+            // Empty line acts as a delimiter for blocks
+            processBuffer();
+            continue;
         }
 
-        // Seçenekleri Bul
-        lines.forEach(line => {
-            const match = line.match(optionRegex);
-            if (match) {
-                const char = match[1].toUpperCase();
-                optionsMap[char] = match[2];
-            } else {
-                nonOptionLines.push(line);
-            }
-        });
-
-        // Soruyu Oluştur
-        // Soru metninin başındaki "1.", "1)" gibi numaraları temizle
-        if (nonOptionLines.length > 0) {
-            nonOptionLines[0] = nonOptionLines[0].replace(/^\d+[\.\)\s]+/, '');
-            questionText = nonOptionLines.join(' ');
-        }
-
-        // 5 Seçeneğe kadar kontrol et (A-E)
-        // Eğer E seçeneği yoksa undefined dönecektir, filter ile temizleriz.
-        const possibleOptions = ['A', 'B', 'C', 'D', 'E'];
-        const optionsArr = possibleOptions.map(char => optionsMap[char]).filter(opt => opt !== undefined);
-
-        // En az 2 seçenek olmalı ve soru metni dolu olmalı
-        if (questionText && optionsArr.length >= 2 && correctAnswerIndex !== -1 && correctAnswerIndex < optionsArr.length) {
-            newQuestions.push({
-                id: Date.now() + index, // Basit ID oluşturma
-                questionText,
-                options: optionsArr,
-                correctAnswerIndex
-            });
+        // Try to parse as single-line question first
+        const inlineQ = parseInlineQuestion(line, newQuestions.length);
+        
+        if (inlineQ) {
+            // If we found an inline question, any pending buffer must be a previous block
+            processBuffer(); 
+            newQuestions.push(inlineQ);
             successCount++;
         } else {
-            failCount++;
-            console.warn('Blok ayrıştırılamadı:', block);
+            // If not inline, assume it's part of a block
+            buffer.push(line);
         }
-    });
+    }
+    // Process any remaining lines in buffer
+    processBuffer();
 
     if (newQuestions.length > 0) {
         onAddQuestions(topic.id, newQuestions);
-        alert(`${successCount} soru başarıyla eklendi.${failCount > 0 ? ` ${failCount} soru format hatası nedeniyle eklenemedi.` : ''}`);
+        alert(`${successCount} soru başarıyla eklendi.${failCount > 0 ? ` ${failCount} adet soru veya blok format hatası nedeniyle eklenemedi.` : ''}`);
         onClose();
     } else {
-        setError('Hiçbir geçerli soru bulunamadı. Lütfen formatı kontrol edin. Soru blokları arasında boşluk olduğundan ve "Cevap: X" formatının doğru olduğundan emin olun.');
+        setError('Hiçbir geçerli soru bulunamadı. Lütfen formatı kontrol edin. Soruların "Cevap: [A-E]" ile bittiğinden emin olun.');
     }
   };
 
@@ -100,26 +179,24 @@ const BulkAddQuestionsModal: React.FC<BulkAddQuestionsModalProps> = ({ topic, on
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
       <div className="bg-slate-800 rounded-2xl p-8 w-full max-w-4xl shadow-2xl relative max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
         <h2 className="text-2xl font-bold text-cyan-400 mb-4">Toplu Soru Ekle (Metin ile)</h2>
         
         <div className="text-slate-400 mb-4 text-sm bg-slate-900 p-4 rounded-md border border-slate-700 overflow-y-auto max-h-40">
-            <p className="font-bold text-slate-300 mb-2">Format Kuralları:</p>
-            <ul className="list-disc list-inside space-y-1">
-                <li>Her soru grubu arasında <strong>bir boş satır</strong> bırakın.</li>
-                <li>Seçenekler <strong>A)</strong>, <strong>B.</strong> vb. şeklinde başlamalıdır (A, B, C, D, E desteklenir).</li>
-                <li>Doğru cevap en sonda <strong>Cevap: E</strong> veya <strong>Answer: A</strong> şeklinde belirtilmelidir.</li>
+            <p className="font-bold text-slate-300 mb-2">Desteklenen Formatlar:</p>
+            <ul className="list-disc list-inside space-y-2 mb-3">
+                <li>
+                    <strong>Tek Satır Formatı:</strong> Soru, seçenekler ve cevap tek satırda.
+                    <br/><span className="text-xs text-slate-500 ml-4">Örnek: 1. Soru Metni? A) Seçenek B) Seçenek Cevap: A</span>
+                </li>
+                <li>
+                    <strong>Blok Formatı:</strong> Soru ve seçenekler alt alta, soru grupları arasında boş satır.
+                </li>
             </ul>
-            <p className="font-semibold text-slate-300 mt-3">Örnek:</p>
+            <p className="font-semibold text-slate-300">Örnek Giriş:</p>
             <pre className="mt-1 text-xs text-slate-500 whitespace-pre-wrap font-mono select-all bg-slate-800 p-2 rounded border border-slate-600">
-{`1. Türkiye Cumhuriyeti'nin başkenti neresidir?
-A) İstanbul
-B) Ankara
-C) İzmir
-D) Bursa
-E) Adana
-Cevap: B
+{`4982 sayılı Kanuna göre Kurul kaç üyeden oluşur? A) 5 B) 7 C) 9 D) 11 E) 13 Cevap: C
 
 2. Aşağıdakilerden hangisi bir mevsim değildir?
 A) Yaz
