@@ -1,0 +1,186 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>TTK GÖREVDE YÜKSELME SINAVI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <!-- Quill Snow Theme CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in {
+        animation: fadeIn 0.5s ease-out forwards;
+      }
+
+      /* Quill Dark Theme Overrides */
+      .ql-toolbar {
+        background-color: #1e293b !important; /* slate-800 */
+        border: 1px solid #334155 !important; /* slate-700 */
+        border-top-left-radius: 0.5rem;
+        border-top-right-radius: 0.5rem;
+        border-bottom: none !important;
+      }
+      .ql-container {
+        background-color: #0f172a !important; /* slate-900 */
+        color: #cbd5e1 !important; /* slate-300 */
+        border: 1px solid #334155 !important; /* slate-700 */
+        border-bottom-left-radius: 0.5rem;
+        border-bottom-right-radius: 0.5rem;
+        min-height: 150px;
+        font-size: 1rem;
+        font-family: 'Inter', sans-serif;
+      }
+      .ql-editor {
+        padding: 1rem !important;
+      }
+      .ql-editor.ql-blank::before {
+        color: #64748b !important; /* slate-500 */
+        font-style: normal !important;
+      }
+      .ql-snow .ql-stroke {
+        stroke: #94a3b8 !important; /* slate-400 */
+      }
+      .ql-snow .ql-picker-label {
+        color: #94a3b8 !important; /* slate-400 */
+      }
+      .ql-snow .ql-picker-options {
+        background-color: #1e293b !important; /* slate-800 */
+        border-color: #334155 !important; /* slate-700 */
+      }
+      .ql-snow .ql-picker-item:hover, .ql-snow .ql-picker-item.ql-selected {
+        color: #22d3ee !important; /* cyan-400 */
+      }
+      .ql-snow .ql-active .ql-stroke {
+        stroke: #22d3ee !important; /* cyan-400 */
+      }
+      .ql-snow .ql-active .ql-fill {
+        fill: #22d3ee !important; /* cyan-400 */
+      }
+       .ql-snow .ql-picker.ql-header .ql-picker-label::before, .ql-snow .ql-picker.ql-header .ql-picker-item::before {
+        color: #94a3b8;
+      }
+      .ql-snow .ql-active.ql-picker-label, .ql-snow .ql-picker-label:hover {
+        color: #22d3ee !important;
+      }
+
+      /* Basic prose styles for dark theme */
+      .prose-dark h1, .prose-dark h2, .prose-dark h3 {
+        color: #fff;
+        margin-bottom: 0.5em;
+      }
+      .prose-dark p {
+        color: #cbd5e1; /* slate-300 */
+        line-height: 1.7;
+        margin-bottom: 1em;
+      }
+      .prose-dark ul, .prose-dark ol {
+        color: #cbd5e1; /* slate-300 */
+        padding-left: 1.5em;
+        margin-bottom: 1em;
+      }
+      .prose-dark li {
+        margin-bottom: 0.5em;
+      }
+      .prose-dark ul {
+        list-style-type: disc;
+      }
+      .prose-dark ol {
+        list-style-type: decimal;
+      }
+      .prose-dark strong, .prose-dark b {
+        color: #fff;
+        font-weight: 600;
+      }
+      .prose-dark a {
+        color: #67e8f9; /* cyan-300 */
+        text-decoration: underline;
+      }
+      
+      /* Basic prose styles for light theme */
+      .prose-light h1, .prose-light h2, .prose-light h3,
+      .prose-light p, .prose-light li, .prose-light ul, .prose-light ol,
+      .prose-light strong, .prose-light b, .prose-light a
+       {
+        color: #1e293b !important;
+      }
+      .prose-light p {
+        line-height: 1.7;
+        margin-bottom: 1em;
+      }
+      .prose-light ul, .prose-light ol {
+        padding-left: 1.5em;
+        margin-bottom: 1em;
+      }
+      .prose-light li {
+        margin-bottom: 0.5em;
+      }
+      .prose-light ul {
+        list-style-type: disc;
+      }
+      .prose-light ol {
+        list-style-type: decimal;
+      }
+      .prose-light strong, .prose-light b {
+        font-weight: 600;
+      }
+      .prose-light a {
+        text-decoration: underline;
+      }
+
+      /* Print styles to remove headers/footers */
+      @media print {
+        @page {
+          margin: 0;
+          size: A4; /* Optional: Sets page size */
+        }
+        body {
+          margin: 0;
+          padding: 0;
+          background-color: #fff !important;
+          color: #000 !important;
+          -webkit-print-color-adjust: exact; /* Ensures background colors are printed */
+          print-color-adjust: exact;
+        }
+        /* Hide elements not meant for print */
+        nav, footer, .no-print {
+          display: none !important;
+        }
+        /* Reset any specific dark theme styles for print */
+        .ql-toolbar, .ql-container {
+          border: none !important;
+          box-shadow: none !important;
+        }
+        .ql-editor {
+          background-color: #fff !important;
+          color: #000 !important;
+        }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^0.14.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-slate-900 text-white">
+    <div id="root"></div>
+    <!-- Quill JS -->
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
