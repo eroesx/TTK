@@ -1,0 +1,140 @@
+
+import React, { useState, useEffect } from 'react';
+import type { QuizConfigModalProps } from '../types';
+import ShuffleIcon from './icons/ShuffleIcon';
+
+const QuizConfigModal: React.FC<QuizConfigModalProps> = ({ topic, onClose, onStartQuiz }) => {
+  const [questionCount, setQuestionCount] = useState(topic.questions.length.toString()); // Default to all questions
+  const [shuffle, setShuffle] = useState(false);
+  const [error, setError] = useState('');
+
+  // Generate question count options in multiples of 5
+  const generateQuestionCountOptions = () => {
+    const total = topic.questions.length;
+    const options = [];
+    for (let i = 5; i <= total; i += 5) {
+      options.push(i);
+    }
+    // Ensure the total count is an option if it's not a multiple of 5, and it's not already there
+    if (total % 5 !== 0 && !options.includes(total)) {
+      options.push(total);
+    }
+    // Sort to ensure correct order
+    options.sort((a, b) => a - b);
+    return options;
+  };
+
+  useEffect(() => {
+    // If the selected questionCount is no longer valid (e.g., topic changed and has fewer questions),
+    // reset to 'all' or the max available.
+    const currentCountNum = parseInt(questionCount, 10);
+    if (questionCount !== 'all' && (isNaN(currentCountNum) || currentCountNum <= 0 || currentCountNum > topic.questions.length)) {
+      setQuestionCount(topic.questions.length.toString()); // Reset to all questions
+    }
+  }, [topic.questions.length, questionCount]);
+
+  const handleStartQuiz = () => {
+    setError('');
+    let finalQuestionCount = 0;
+
+    if (questionCount === 'all' || questionCount === topic.questions.length.toString()) { // Check for 'all' or actual total questions
+      finalQuestionCount = topic.questions.length;
+    } else {
+      finalQuestionCount = parseInt(questionCount, 10);
+      if (isNaN(finalQuestionCount) || finalQuestionCount <= 0 || finalQuestionCount > topic.questions.length) {
+        setError(`Lütfen 1 ile ${topic.questions.length} arasında geçerli bir soru adedi girin.`);
+        return;
+      }
+    }
+
+    if (finalQuestionCount === 0) {
+        setError('Bu konuda hiç soru bulunmuyor. Lütfen başka bir konu seçin veya sorular ekleyin.');
+        return;
+    }
+
+    // IMPORTANT FIX: Close the modal immediately, then trigger the quiz start AFTER the modal state is updated.
+    // This helps prevent the modal from re-opening due to state re-renders in the parent component.
+    onClose(); 
+    // Use setTimeout(..., 0) to defer quiz start to the next event loop tick
+    // This ensures the parent App component has fully processed the `onClose` state update
+    // before `handleSelectTopic` (from App.tsx) is called.
+    setTimeout(() => { 
+      onStartQuiz(topic, {
+        questionCount: finalQuestionCount,
+        shuffle,
+        showHints: true, // Always enable hints logic internally if available
+      });
+    }, 0); 
+  };
+
+  const questionCountOptions = generateQuestionCountOptions();
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[70] animate-fade-in" 
+      onClick={onClose}
+    >
+      <div
+        className="bg-slate-800 rounded-2xl p-5 w-full max-w-sm shadow-2xl relative flex flex-col max-h-[85vh] h-auto" 
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+        <h2 className="text-2xl font-bold text-cyan-400 mb-4 shrink-0">Test Ayarları</h2>
+        <p className="text-slate-300 mb-6">
+          <span className="font-semibold text-white">{topic.name}</span> konusu için test ayarlarını belirleyin. (Toplam: {topic.questions.length} soru)
+        </p>
+
+        <div className="space-y-5 overflow-y-auto pr-2 min-h-0"> 
+          <div>
+            <label htmlFor="question-count" className="block text-sm font-medium text-slate-300 mb-2">
+              Çözülecek Soru Adedi
+            </label>
+            <select
+              id="question-count"
+              value={questionCount}
+              onChange={(e) => {
+                setQuestionCount(e.target.value);
+                setError(''); // Clear error on change
+              }}
+              className="w-full bg-slate-900 border border-slate-700 rounded-md p-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition text-white"
+            >
+              <option value={topic.questions.length.toString()}>Tüm Sorular ({topic.questions.length})</option>
+              {questionCountOptions.map((num) => (
+                <option key={num} value={num}>
+                  {num} Soru
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between py-2 border-t border-slate-700">
+            <label htmlFor="shuffle-toggle" className="text-sm font-medium text-slate-300 cursor-pointer flex items-center gap-2">
+              <ShuffleIcon isActive={shuffle} /> Soruları Karıştır
+            </label>
+            <label htmlFor="shuffle-toggle" className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                id="shuffle-toggle"
+                className="sr-only peer"
+                checked={shuffle}
+                onChange={() => setShuffle(prev => !prev)}
+              />
+              <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-focus:ring-4 peer-focus:ring-cyan-500/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+            </label>
+          </div>
+        </div>
+        
+        {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
+
+        <div className="flex justify-end gap-4 pt-4 mt-2 shrink-0"> 
+          <button type="button" onClick={onClose} className="px-6 py-2 rounded-md bg-slate-700 hover:bg-slate-600 transition-colors">İptal</button>
+          <button type="button" onClick={handleStartQuiz} className="px-6 py-2 rounded-md bg-cyan-600 hover:bg-cyan-500 font-semibold transition-colors">Testi Başlat</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default QuizConfigModal;

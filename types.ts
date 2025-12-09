@@ -39,7 +39,8 @@ export interface HomeSelectionProps extends MobileLayoutProps {
   onSelectKonuOzetleri: () => void;
   onSelectBilgiKartlari: () => void;
   onSelectAyarlar: () => void;
-  appTitle: string; // Add appTitle here
+  onSelectDenemeSinavi: () => void; // New prop for Exam Mode
+  appTitle: string; 
 }
 
 export interface TopicSelectionProps extends MobileLayoutProps {
@@ -80,9 +81,11 @@ export interface QuizViewProps extends MobileLayoutProps {
   onDeleteQuestion: (topicId: string, questionId: number) => void;
   onEditQuestion: (topicId: string, updatedQuestion: Question) => void;
   onUpdateQuestionNote: (topicId: string, questionId: number, note: string) => void;
-  questionStates: QuestionState[]; // Add this
+  questionStates: QuestionState[];
   mobileFontSize: string;
   desktopFontSize: string;
+  mode?: 'practice' | 'exam'; // New mode prop
+  examDuration?: number; // Duration in minutes for exam mode
 }
 
 export interface ResultsViewProps extends MobileLayoutProps {
@@ -144,4 +147,10 @@ export interface QuizConfigModalProps {
   topic: Topic;
   onClose: () => void;
   onStartQuiz: (topic: Topic, options: { questionCount: number; shuffle: boolean; showHints: boolean; }) => void;
+}
+
+export interface ExamConfigModalProps {
+  totalAvailableQuestions: number;
+  onClose: () => void;
+  onStartExam: (config: { questionCount: number; duration: number }) => void;
 }

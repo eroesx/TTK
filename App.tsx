@@ -17,7 +17,8 @@ import BulkAddFlashcardsModal from './components/BulkAddFlashcardsModal';
 import BulkUpdateFlashcardsModal from './components/BulkUpdateFlashcardsModal';
 import ManageFlashcardsModal from './components/ManageFlashcardsModal';
 import RestoreSummaryModal from './components/RestoreSummaryModal';
-import QuizConfigModal from './components/QuizConfigModal'; // Import new modal
+import QuizConfigModal from './components/QuizConfigModal';
+import ExamConfigModal from './components/ExamConfigModal'; // Import ExamConfigModal
 
 type View = 'home' | 'topicSelection' | 'quiz' | 'results' | 'summaries' | 'bilgiKartlari' | 'settings';
 
@@ -38,13 +39,23 @@ const generateInitialTopics = (): Topic[] => {
             .replace(/ç/g, 'c')
             .replace(/[^a-z0-9-]/g, '');
 
+        // Ensure questions comply with Question interface, defaulting correctAnswerIndex if missing
+        const rawQuestions = questionsData[index] || [];
+        const questions: Question[] = rawQuestions.map((q: any) => ({
+            id: q.id,
+            questionText: q.questionText,
+            options: q.options,
+            correctAnswerIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
+            note: q.note
+        }));
+
         return {
             id: `${id}-${index}`,
             name: name,
             iconName: availableIcons[index % availableIcons.length].name,
             color: availableColorPalettes[index % availableColorPalettes.length].color,
             bgColor: availableColorPalettes[index % availableColorPalettes.length].bgColor,
-            questions: questionsData[index] || [],
+            questions: questions,
             summary: summariesData[index] || '',
             flashcards: [],
             isFavorite: false,
@@ -129,6 +140,11 @@ const App: React.FC = () => {
   // States for QuizConfigModal
   const [isQuizConfigModalOpen, setIsQuizConfigModalOpen] = useState(false);
   const [topicForQuizConfig, setTopicForQuizConfig] = useState<Topic | null>(null);
+
+  // States for ExamConfigModal
+  const [isExamConfigModalOpen, setIsExamConfigModalOpen] = useState(false);
+  const [quizMode, setQuizMode] = useState<'practice' | 'exam'>('practice');
+  const [examDuration, setExamDuration] = useState(0);
 
 
   const [isBulkAddFlashcardsModalOpen, setIsBulkAddFlashcardsModalOpen] = useState(false);
@@ -264,6 +280,9 @@ const App: React.FC = () => {
   }, []); // Empty dependency array ensures this runs only once on mount
 
   const handleSelectTopic = (topic: Topic, options: { questionCount: number; shuffle: boolean; showHints: boolean; }) => {
+    setQuizMode('practice');
+    setExamDuration(0);
+    
     let questionsToUse = [...topic.questions];
 
     // Apply questionCount filter
@@ -305,9 +324,51 @@ const App: React.FC = () => {
     }
     
     setCurrentView('quiz');
-    // Ensure QuizConfigModal is closed, this is now handled by QuizConfigModal itself
-    // setIsQuizConfigModalOpen(false); 
-    // setTopicForQuizConfig(null);
+  };
+
+  const handleStartExam = (config: { questionCount: number; duration: number }) => {
+    // Aggregate all questions
+    let allQuestions: Question[] = [];
+    topics.forEach(topic => {
+      allQuestions = [...allQuestions, ...topic.questions];
+    });
+
+    // Shuffle
+    allQuestions.sort(() => Math.random() - 0.5);
+
+    // Limit to requested count
+    const questionsToUse = allQuestions.slice(0, config.questionCount).map((q, idx) => ({
+        ...q,
+        id: Date.now() + idx, // Regenerate IDs to avoid key conflicts or topic reference issues in this mixed mode
+    }));
+
+    // Create a dummy topic for the exam
+    const examTopic: Topic = {
+        id: `exam-${Date.now()}`,
+        name: "Genel Deneme Sınavı",
+        iconName: 'Quiz',
+        color: 'bg-violet-500/20',
+        bgColor: 'bg-violet-900/40',
+        questions: questionsToUse,
+        summary: '',
+        flashcards: [],
+        showHints: false
+    };
+
+    setSelectedTopic(examTopic);
+    setQuizMode('exam');
+    setExamDuration(config.duration);
+    
+    // Initialize quiz history
+    setQuizHistory(questionsToUse.map(() => ({
+      selectedAnswerIndex: null,
+      isCorrect: null,
+      isAnswered: false,
+    })));
+
+    setPreviousScore(undefined); // No previous score for random exams
+    setIsExamConfigModalOpen(false);
+    setCurrentView('quiz');
   };
 
   const handleOpenQuizConfigModal = (topic: Topic) => {
@@ -317,7 +378,7 @@ const App: React.FC = () => {
 
   const handleQuizComplete = (score: number) => { // Score parameter is now the calculated score from QuizView
     setQuizScore(score);
-    if (selectedTopic) {
+    if (selectedTopic && quizMode === 'practice') {
         // Store score against the original topic ID even for shuffled quizzes
         const originalTopicId = selectedTopic.originalId || selectedTopic.id;
         lastQuizScores.current = { ...lastQuizScores.current, [originalTopicId]: score };
@@ -743,6 +804,8 @@ const handleUpdateDesktopFontSize = (size: string) => {
                                     questionStates={quizHistory} // Pass quizHistory here
                                     mobileFontSize={mobileFontSize}
                                     desktopFontSize={desktopFontSize}
+                                    mode={quizMode}
+                                    examDuration={examDuration}
                                 />;
       case 'results':
         return selectedTopic && <ResultsView 
@@ -807,6 +870,7 @@ const handleUpdateDesktopFontSize = (size: string) => {
                     onSelectKonuOzetleri={() => setCurrentView('summaries')}
                     onSelectBilgiKartlari={() => setCurrentView('bilgiKartlari')}
                     onSelectAyarlar={() => setCurrentView('settings')}
+                    onSelectDenemeSinavi={() => setIsExamConfigModalOpen(true)}
                     isMobileLayout={isMobileLayout}
                     appTitle={appTitle} // Pass appTitle to HomeSelection
                 />;
@@ -885,6 +949,13 @@ const handleUpdateDesktopFontSize = (size: string) => {
             setTopicForQuizConfig(null);
           }}
           onStartQuiz={handleSelectTopic}
+        />
+      )}
+      {isExamConfigModalOpen && (
+        <ExamConfigModal
+          totalAvailableQuestions={topics.reduce((acc, t) => acc + t.questions.length, 0)}
+          onClose={() => setIsExamConfigModalOpen(false)}
+          onStartExam={handleStartExam}
         />
       )}
       <SaveStatusToast status={saveStatus} onIdle={onIdle} />
