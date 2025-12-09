@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import type { ExamConfigModalProps } from '../types';
-import QuizIcon from './icons/QuizIcon';
+import PenPaperIcon from './icons/PenPaperIcon';
 
 const ExamConfigModal: React.FC<ExamConfigModalProps> = ({ totalAvailableQuestions, onClose, onStartExam }) => {
   const [questionCount, setQuestionCount] = useState(20);
@@ -23,7 +23,7 @@ const ExamConfigModal: React.FC<ExamConfigModalProps> = ({ totalAvailableQuestio
         
         <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-violet-500/20 rounded-lg">
-                <QuizIcon />
+                <PenPaperIcon className="h-6 w-6 text-violet-400" />
             </div>
             <h2 className="text-2xl font-bold text-violet-400">Deneme Sınavı</h2>
         </div>

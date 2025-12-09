@@ -139,26 +139,18 @@ const QuizView: React.FC<QuizViewProps> = ({
     }
 
     // FIX: Enhanced focus management for mobile devices.
-    const timer = setTimeout(() => {
-        if (containerRef.current) {
-            containerRef.current.focus({ preventScroll: true });
-        }
-        
-        const activeEl = document.activeElement;
-        if (activeEl instanceof HTMLElement && activeEl !== containerRef.current && activeEl !== document.body) {
-            if (!activeEl.closest('.ql-container')) {
-                activeEl.blur();
-            }
-        }
-        
-        if (containerRef.current) {
-            containerRef.current.scrollTop = 0;
-        }
-        window.scrollTo(0, 0);
-        
-    }, 150);
+    // Explicitly blur the active element immediately to prevent sticky focus
+    if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
 
-    return () => clearTimeout(timer);
+    // Move focus to container to reset browser focus state
+    if (containerRef.current) {
+        containerRef.current.focus({ preventScroll: true });
+        containerRef.current.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+
   }, [currentQuestionIndex, topic, quizHistory, currentQuestion, mode]);
 
   useEffect(() => {
@@ -176,6 +168,7 @@ const QuizView: React.FC<QuizViewProps> = ({
   const handleAnswerSelect = (index: number) => {
     if (quizHistory[currentQuestionIndex]?.isAnswered) return;
 
+    // Blur immediately upon selection to prevent state carry-over
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -439,7 +432,7 @@ const QuizView: React.FC<QuizViewProps> = ({
       <div className={`flex-grow overflow-y-auto grid ${isMobileLayout ? 'grid-cols-1 gap-2 mt-1 content-start' : 'md:grid-cols-2 gap-4 mt-4 content-center'}`}>
         {currentQuestion.options.map((option, index) => (
           <button
-            key={index}
+            key={`${currentQuestion.id}-${index}`}
             onClick={() => handleAnswerSelect(index)}
             disabled={currentQuestionState?.isAnswered} 
             className={`

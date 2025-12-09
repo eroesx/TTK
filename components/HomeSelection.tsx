@@ -5,10 +5,11 @@ import QuizIcon from './icons/QuizIcon';
 import SummaryIcon from './icons/SummaryIcon';
 import DocumentIcon from './icons/DocumentIcon';
 import SettingsIcon from './icons/SettingsIcon';
+import PenPaperIcon from './icons/PenPaperIcon';
 
 const mainCategories = [
     { id: 'sorular', name: 'Sorular', icon: <QuizIcon />, color: 'cyan', action: 'onSelectSorular' },
-    { id: 'deneme-sinavi', name: 'Deneme Sınavı', icon: <QuizIcon />, color: 'violet', action: 'onSelectDenemeSinavi' },
+    { id: 'deneme-sinavi', name: 'Deneme Sınavı', icon: <PenPaperIcon />, color: 'violet', action: 'onSelectDenemeSinavi' },
     { id: 'bilgi-kartlari', name: 'Bilgi Kartları', icon: <DocumentIcon />, color: 'sky', action: 'onSelectBilgiKartlari' },
     { id: 'ozetler', name: 'Konu Özetleri', icon: <SummaryIcon />, color: 'amber', action: 'onSelectKonuOzetleri' },
 ];
