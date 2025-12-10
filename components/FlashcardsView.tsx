@@ -81,7 +81,8 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   onDeleteTopic,
   onToggleFavorite,
   availableIcons,
-  onOpenBulkAddModal
+  onOpenBulkAddModal,
+  onOpenManageCardsModal
 }) => {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [deck, setDeck] = useState<Flashcard[]>([]);
@@ -271,7 +272,8 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
                 </button>
                 {isMenuOpen && (
                 <div className="absolute top-full right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-md shadow-lg z-20 animate-fade-in">
-                    <button onClick={() => { onOpenBulkAddModal(selectedTopic); setIsMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded-t-md">Toplu Kart Ekle</button>
+                    <button onClick={() => { onOpenManageCardsModal(selectedTopic); setIsMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded-t-md border-b border-slate-700">Kartları Yönet</button>
+                    <button onClick={() => { onOpenBulkAddModal(selectedTopic); setIsMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700">Toplu Kart Ekle</button>
                     <button onClick={() => { setIsEditModalOpen(true); setIsMenuOpen(false); }} disabled={!currentCard} className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed">Kartı Düzenle</button>
                     <button onClick={handleDelete} disabled={!currentCard} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 rounded-b-md disabled:text-slate-500 disabled:cursor-not-allowed">Kartı Sil</button>
                 </div>
