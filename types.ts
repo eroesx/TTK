@@ -135,6 +135,7 @@ export interface SettingsViewProps {
   onResetData: () => void;
   onBackupData: () => void;
   onRestoreData: (file: File) => void;
+  onRestoreDefaultData: () => void;
   appTitle: string; 
   onUpdateAppTitle: (newTitle: string) => void; 
   mobileFontSize: string;

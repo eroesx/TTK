@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Topic, Question, Flashcard, QuestionState } from './types';
-import { availableIcons, availableColorPalettes, DATA_VERSION, quizData } from './data/quizData';
+import { availableIcons, availableColorPalettes, DATA_VERSION } from './data/quizData';
+import { defaultBackupData } from './data/defaultBackupData';
 import TopicSelection from './components/TopicSelection';
 import QuizView from './components/QuizView';
 import ResultsView from './components/ResultsView';
@@ -24,56 +25,25 @@ type View = 'home' | 'topicSelection' | 'quiz' | 'results' | 'summaries' | 'bilg
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-// Helper function to generate initial topics from quizData
+// Helper function to generate initial topics from defaultBackupData
 const generateInitialTopics = (): Topic[] => {
-    const { topicNames, summariesData, questionsData } = quizData;
-
-    return topicNames.map((name: string, index: number) => {
-        const id = name.toLowerCase()
-            .replace(/ /g, '-')
-            .replace(/ı/g, 'i')
-            .replace(/ğ/g, 'g')
-            .replace(/ü/g, 'u')
-            .replace(/ş/g, 's')
-            .replace(/ö/g, 'o')
-            .replace(/ç/g, 'c')
-            .replace(/[^a-z0-9-]/g, '');
-
-        // Ensure questions comply with Question interface, defaulting correctAnswerIndex if missing
-        const rawQuestions = questionsData[index] || [];
-        const questions: Question[] = rawQuestions.map((q: any) => ({
-            id: q.id,
-            questionText: q.questionText,
-            options: q.options,
-            correctAnswerIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
-            note: q.note
-        }));
-
-        return {
-            id: `${id}-${index}`,
-            name: name,
-            iconName: availableIcons[index % availableIcons.length].name,
-            color: availableColorPalettes[index % availableColorPalettes.length].color,
-            bgColor: availableColorPalettes[index % availableColorPalettes.length].bgColor,
-            questions: questions,
-            summary: summariesData[index] || '',
-            flashcards: [],
-            isFavorite: false,
-        };
-    });
+    return defaultBackupData.appTopics.map(topic => ({
+        ...topic,
+        // Ensure all properties are correctly typed and present
+        isFavorite: topic.isFavorite ?? false,
+        flashcards: topic.flashcards ?? [],
+        questions: topic.questions.map(q => ({...q})) // Deep copy questions
+    }));
 };
 
-const useDebouncedSave = (topics: Topic[], initialTopics: Topic[]) => {
+const useDebouncedSave = (topics: Topic[], appTitle: string) => {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-  // FIX: Explicitly initialize useRef with null to provide an initial value and a more accurate type.
   const timeoutRef = useRef<number | null>(null);
-  const isInitialMount = useRef(true);
+  const isInitialMountRef = useRef(true);
 
   useEffect(() => {
-    // initialTopics is stable, so we don't save when topics are first loaded.
-    if (isInitialMount.current || topics === initialTopics) {
-      isInitialMount.current = false;
-      return;
+    if (isInitialMountRef.current) {
+        return; // Do not save on initial mount/load
     }
 
     setSaveStatus('saving');
@@ -84,10 +54,11 @@ const useDebouncedSave = (topics: Topic[], initialTopics: Topic[]) => {
     timeoutRef.current = window.setTimeout(() => {
       try {
         localStorage.setItem('appTopics', JSON.stringify(topics));
+        localStorage.setItem('appTitle', appTitle);
         localStorage.setItem('appDataVersion', DATA_VERSION.toString());
         setSaveStatus('saved');
       } catch (error) {
-        console.error("Failed to save topics:", error);
+        console.error("Failed to save data:", error);
         setSaveStatus('error');
       }
     }, 1500);
@@ -97,7 +68,14 @@ const useDebouncedSave = (topics: Topic[], initialTopics: Topic[]) => {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [topics, initialTopics]);
+  }, [topics, appTitle]);
+
+  useEffect(() => {
+      // After the initial data is loaded and set, change the ref.
+      if(topics.length > 0) {
+          isInitialMountRef.current = false;
+      }
+  }, [topics]);
 
   const handleIdle = useCallback(() => {
     if (saveStatus === 'saved' || saveStatus === 'error') {
@@ -113,7 +91,6 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('home');
   const [isLoading, setIsLoading] = useState(true);
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [initialTopics, setInitialTopics] = useState<Topic[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [quizScore, setQuizScore] = useState(0);
   const [isAddQuestionModalOpen, setIsAddQuestionModalOpen] = useState(false);
@@ -155,7 +132,7 @@ const App: React.FC = () => {
   const [restoreData, setRestoreData] = useState<{ topics: Topic[], version: number } | null>(null);
 
 
-  const { saveStatus, onIdle } = useDebouncedSave(topics, initialTopics);
+  const { saveStatus, onIdle } = useDebouncedSave(topics, appTitle);
 
   // This effect synchronizes the topic objects held in state for modals/views
   // with the main `topics` array. This prevents stale data from being displayed
@@ -206,7 +183,6 @@ const App: React.FC = () => {
     const initializeAppData = () => {
       try {
         const generatedInitialTopics = generateInitialTopics();
-        setInitialTopics(generatedInitialTopics);
         
         const savedTopicsRaw = localStorage.getItem('appTopics');
         const savedVersionRaw = localStorage.getItem('appDataVersion');
@@ -254,17 +230,16 @@ const App: React.FC = () => {
         // If parsing fails, reset to default data
         const defaultTopics = generateInitialTopics();
         setTopics(defaultTopics);
-        setInitialTopics(defaultTopics);
       } finally {
         setIsLoading(false);
       }
     };
-    
-    // Removed explicit isMobileLayout check here as it is now handled in useState initialization
 
     const savedAppTitle = localStorage.getItem('appTitle');
     if (savedAppTitle) {
       setAppTitle(savedAppTitle);
+    } else {
+      setAppTitle(defaultBackupData.appTitle);
     }
 
     const savedMobileFontSize = localStorage.getItem('mobileFontSize');
@@ -277,7 +252,7 @@ const App: React.FC = () => {
     }
 
     initializeAppData();
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []);
 
   const handleSelectTopic = (topic: Topic, options: { questionCount: number; shuffle: boolean; showHints: boolean; }) => {
     setQuizMode('practice');
@@ -592,10 +567,7 @@ const handleRestoreData = (file: File) => {
             setAppTitle(restoredAppTitle); // Set app title from restored data
             setIsRestoreSummaryModalOpen(true);
 
-          } else if (restoredData.topicNames && Array.isArray(restoredData.topicNames)) {
-            alert('Bu dosya bir yedek dosyası değil, uygulamanın ilk veri dosyasına benziyor. Lütfen "Ayarlar > Veri Yönetimi" menüsünden oluşturduğunuz bir yedek (.json) dosyasını seçin. Uygulamayı ilk haline getirmek isterseniz "Uygulama Verilerini Sıfırla" düğmesini kullanabilirsiniz.');
-          }
-          else {
+          } else {
             alert('Yedek dosyası geçersiz veya bozuk. Lütfen doğru formatta bir yedek dosyası seçtiğinizden emin olun. (İçerik yapısı hatalı: "appTopics" alanı bulunamadı.)');
           }
         } else {
@@ -609,16 +581,34 @@ const handleRestoreData = (file: File) => {
     reader.readAsText(file);
 };
 
+const handleRestoreDefaultData = () => {
+    if (window.confirm("UYARI: Mevcut tüm verileriniz silinecek ve uygulamanın varsayılan soru bankası yüklenecektir. Bu işlem geri alınamaz. Devam etmek istiyor musunuz?")) {
+      try {
+        const { appTopics, appTitle: defaultTitle, appDataVersion: defaultVersion } = defaultBackupData;
+        
+        // Update state
+        setTopics(appTopics);
+        setAppTitle(defaultTitle);
+
+        // Update localStorage directly to reflect the change immediately and trigger save.
+        // The hook will handle debouncing. Setting the state is the primary way.
+        
+        alert("Varsayılan veriler başarıyla yüklendi!");
+        setCurrentView('home'); // Go back to home view
+      } catch (error) {
+        console.error("Failed to restore default data:", error);
+        alert("Varsayılan veriler yüklenirken bir hata oluştu.");
+      }
+    }
+};
+
 const handleConfirmRestore = () => {
     if (!restoreData) return;
 
     try {
-        localStorage.setItem('appTopics', JSON.stringify(restoreData.topics));
-        localStorage.setItem('appDataVersion', restoreData.version.toString());
-        localStorage.setItem('appTitle', appTitle); // Save the restored app title
-
+        // Set state to trigger debounced save
         setTopics(restoreData.topics);
-        setInitialTopics(restoreData.topics);
+        setAppTitle(appTitle); // appTitle is already set from restoreData preview
 
         setIsRestoreSummaryModalOpen(false);
         setRestoreData(null);
@@ -627,11 +617,8 @@ const handleConfirmRestore = () => {
         setCurrentView('home');
         
     } catch (error) {
-        console.error("Geri yükleme sırasında localStorage'a yazma hatası:", error);
-        alert(
-            "Geri yükleme başarısız oldu. Veriler tarayıcınızın deposuna kaydedilemedi. " +
-            "Depolama alanınız dolu olabilir veya tarayıcınız depolamayı engelliyor olabilir."
-        );
+        console.error("Geri yükleme sırasında state güncelleme hatası:", error);
+        alert("Geri yükleme başarısız oldu.");
         setIsRestoreSummaryModalOpen(false);
         setRestoreData(null);
     }
@@ -752,7 +739,6 @@ const handleSyncData = async () => {
 
 const handleUpdateAppTitle = (newTitle: string) => {
     setAppTitle(newTitle);
-    localStorage.setItem('appTitle', newTitle);
 };
 
 const handleUpdateMobileFontSize = (size: string) => {
@@ -856,6 +842,7 @@ const handleUpdateDesktopFontSize = (size: string) => {
                     onResetData={handleResetData}
                     onBackupData={handleBackupData}
                     onRestoreData={handleRestoreData}
+                    onRestoreDefaultData={handleRestoreDefaultData}
                     appTitle={appTitle}
                     onUpdateAppTitle={handleUpdateAppTitle}
                     mobileFontSize={mobileFontSize}

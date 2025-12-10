@@ -8,6 +8,7 @@ import TrashIcon from './icons/TrashIcon';
 import AddIcon from './icons/AddIcon';
 import { GITHUB_REPO_URL } from '../data/quizData';
 import GitHubIcon from './icons/GitHubIcon';
+import RestoreIcon from './icons/RestoreIcon';
 
 const mobileFontOptions = [
     { label: 'Küçük (10.5pt)', value: 'text-sm' },
@@ -34,6 +35,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onResetData,
   onBackupData,
   onRestoreData,
+  onRestoreDefaultData,
   appTitle,
   onUpdateAppTitle,
   mobileFontSize,
@@ -279,6 +281,21 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           />
         </div>
 
+        <div className="flex items-center justify-between gap-4 py-4 border-b border-slate-800">
+          <div>
+            <p className="text-slate-300 font-medium">Varsayılan Verileri Yükle</p>
+            <p className="text-sm text-slate-500 font-normal mt-1">Uygulamayı, içinde gömülü olan zengin soru bankasıyla ilk haline getirir.</p>
+          </div>
+          <button 
+            onClick={onRestoreDefaultData}
+            className="flex items-center gap-2 px-4 py-2 rounded-md bg-teal-600 text-white font-semibold hover:bg-teal-500 transition-colors shrink-0"
+            aria-label="Varsayılan verileri yükle"
+          >
+            <RestoreIcon className="h-5 w-5" />
+            Varsayılanı Yükle
+          </button>
+        </div>
+        
         <div className="flex items-center justify-between gap-4 pt-4">
           <div>
             <p className="text-slate-300 font-medium">Uygulama Verilerini Sıfırla</p>
