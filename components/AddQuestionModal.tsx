@@ -1,6 +1,8 @@
 
 import React, { useState } from 'react';
 import type { Topic, Question } from '../types';
+import AddIcon from './icons/AddIcon';
+import TrashIcon from './icons/TrashIcon';
 
 interface AddQuestionModalProps {
   topic: Topic;
@@ -10,7 +12,7 @@ interface AddQuestionModalProps {
 
 const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onAddQuestion }) => {
   const [questionText, setQuestionText] = useState('');
-  const [options, setOptions] = useState(['', '', '', '']);
+  const [options, setOptions] = useState(['', '', '', '']); // Start with 4 options default
   const [correctAnswerIndex, setCorrectAnswerIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -26,6 +28,26 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onA
     const newOptions = [...options];
     newOptions[index] = value;
     setOptions(newOptions);
+  };
+
+  const handleAddOption = () => {
+    if (options.length < 5) {
+      setOptions([...options, '']);
+    }
+  };
+
+  const handleRemoveOption = (index: number) => {
+    if (options.length <= 2) return; // Minimum 2 options required
+
+    const newOptions = options.filter((_, i) => i !== index);
+    setOptions(newOptions);
+
+    // Adjust correct answer index if necessary
+    if (correctAnswerIndex === index) {
+      setCorrectAnswerIndex(null);
+    } else if (correctAnswerIndex !== null && correctAnswerIndex > index) {
+      setCorrectAnswerIndex(correctAnswerIndex - 1);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -61,7 +83,7 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onA
 
   return (
     <div 
-        className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[60] animate-fade-in"
+        className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 animate-fade-in"
         onClick={onClose}
     >
       <div 
@@ -97,7 +119,7 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onA
                             id={`option-${index}`}
                             checked={correctAnswerIndex === index}
                             onChange={() => setCorrectAnswerIndex(index)}
-                            className="h-4 w-4 text-cyan-600 bg-slate-700 border-slate-600 focus:ring-cyan-500"
+                            className="h-4 w-4 text-cyan-600 bg-slate-700 border-slate-600 focus:ring-cyan-500 shrink-0"
                         />
                         <input
                             type="text"
@@ -106,9 +128,29 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({ topic, onClose, onA
                             className="w-full bg-slate-900 border border-slate-700 rounded-md p-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
                             placeholder={`Seçenek ${index + 1}`}
                         />
+                        {options.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveOption(index)}
+                            className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                            title="Seçeneği Sil"
+                          >
+                            <TrashIcon />
+                          </button>
+                        )}
                     </div>
                 ))}
              </div>
+             {options.length < 5 && (
+                <button
+                    type="button"
+                    onClick={handleAddOption}
+                    className="mt-3 flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors font-medium"
+                >
+                    <AddIcon className="h-4 w-4" />
+                    Seçenek Ekle
+                </button>
+             )}
           </div>
           
           <div className="min-h-[20px] text-sm text-center">

@@ -8,9 +8,10 @@ interface ProgressBarProps {
   totalQuestions: number;
   questionStates: QuestionState[]; 
   topic: Topic; // Add topic prop
+  mode?: 'practice' | 'exam'; // Add mode prop
 }
 
-const ProgressBar: React.FC<ProgressBarProps> = ({ currentQuestionIndex, totalQuestions, questionStates, topic }) => {
+const ProgressBar: React.FC<ProgressBarProps> = ({ currentQuestionIndex, totalQuestions, questionStates, topic, mode = 'practice' }) => {
   // Ensure topic and topic.questions are defined before accessing
   const hasNoteForQuestion = (index: number) => {
     return !!topic?.questions?.[index]?.note;
@@ -56,7 +57,8 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentQuestionIndex, totalQu
                   !state.isAnswered ? 'Yanıtlanmadı' : state.isCorrect ? 'Doğru' : 'Yanlış'
                 }`}
               >
-                {hasNoteForQuestion(index) && (
+                {/* Hide hint/note indicator in exam mode */}
+                {hasNoteForQuestion(index) && mode === 'practice' && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <LightbulbIcon isActive={true} className="h-4 w-4 text-amber-300" />
                   </div>

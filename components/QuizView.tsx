@@ -373,6 +373,7 @@ const QuizView: React.FC<QuizViewProps> = ({
             totalQuestions={topic.questions.length} 
             questionStates={quizHistory} 
             topic={topic}
+            mode={mode}
         />
       </div>
 
@@ -469,21 +470,26 @@ const QuizView: React.FC<QuizViewProps> = ({
       {/* Footer Controls */}
       <div className={`${isMobileLayout ? 'mt-1' : 'mt-4'} pt-1 border-t border-slate-700/50 flex flex-nowrap items-center justify-between gap-3 w-full shrink-0`}>
           <div className="flex items-center gap-1 flex-shrink-0"> 
-              <button
-                onClick={() => setIsEditModalOpen(true)}
-                className="p-2.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
-                aria-label="Soruyu düzenle"
-                title="Soruyu Düzenle"
-              >
-                  <EditIcon className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => setIsNoteVisible(prev => !prev)}
-                className={`p-2.5 rounded-lg transition-all ${isNoteVisible ? 'bg-cyan-900/30 text-cyan-400' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
-                title="Not Ekle/Düzenle"
-              >
-                  <NoteIcon className="h-5 w-5" />
-              </button>
+              {/* Only show Edit/Note buttons in Practice Mode */}
+              {mode === 'practice' && (
+                <>
+                  <button
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="p-2.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
+                    aria-label="Soruyu düzenle"
+                    title="Soruyu Düzenle"
+                  >
+                      <EditIcon className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => setIsNoteVisible(prev => !prev)}
+                    className={`p-2.5 rounded-lg transition-all ${isNoteVisible ? 'bg-cyan-900/30 text-cyan-400' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                    title="Not Ekle/Düzenle"
+                  >
+                      <NoteIcon className="h-5 w-5" />
+                  </button>
+                </>
+              )}
               {/* Hide Hint button in Exam Mode */}
               {mode !== 'exam' && (
                 <button

@@ -21,8 +21,10 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
   const [questionToEdit, setQuestionToEdit] = useState<Question | null>(null);
   const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false); // State for search bar visibility
   const [pendingImportQuestions, setPendingImportQuestions] = useState<Question[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null); // Ref for auto-focusing search
 
   // Print States
   const [isPrintSettingsOpen, setIsPrintSettingsOpen] = useState(false);
@@ -54,6 +56,15 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
         }, 100);
     }
   }, [topic, lastInteractedQuestionId]);
+
+  // Effect to handle search open/close focus
+  useEffect(() => {
+    if (isSearchOpen && searchInputRef.current) {
+        searchInputRef.current.focus();
+    } else if (!isSearchOpen) {
+        setSearchTerm(''); // Clear search when closed
+    }
+  }, [isSearchOpen]);
 
   // FIX: Robust Quill Initialization and Cleanup
   useEffect(() => {
@@ -410,54 +421,91 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
           className="bg-slate-800 md:rounded-2xl w-full md:w-full max-w-4xl shadow-2xl relative h-full md:h-auto md:max-h-[90vh] flex flex-col"
           onClick={e => e.stopPropagation()}
         >
-          <div className="flex justify-between items-start p-6 pb-2 shrink-0">
-            <h2 className="text-xl md:text-2xl font-bold text-cyan-400 pt-1 pr-16 truncate">
+          <div className="flex justify-between items-center p-4 md:p-6 pb-2 shrink-0 gap-4">
+            <h2 className="text-xl md:text-2xl font-bold text-cyan-400 truncate flex-shrink min-w-0">
               <span className="text-slate-400 font-normal hidden md:inline">Konu:</span> {topic.name}
             </h2>
-            <div className="absolute top-4 right-4 flex items-center gap-1 md:gap-2">
+            
+            <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+                {/* Search Bar - Expandable */}
+                <div className={`flex items-center justify-end transition-all duration-300 ease-in-out ${isSearchOpen ? 'w-full md:w-64 mr-2' : 'w-10'}`}>
+                    {isSearchOpen ? (
+                        <div className="relative w-full">
+                            <input
+                                ref={searchInputRef}
+                                type="text"
+                                placeholder="Ara..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onBlur={() => !searchTerm && setIsSearchOpen(false)} // Optional: Close if empty on blur
+                                className="w-full bg-slate-900 border border-slate-600 rounded-md py-1.5 pl-3 pr-8 text-sm text-white placeholder-slate-400 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none"
+                            />
+                            <button 
+                                onClick={() => setIsSearchOpen(false)} 
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => setIsSearchOpen(true)}
+                            title="Sorularda Ara"
+                            className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                        >
+                            <SearchIcon className="h-6 w-6" />
+                        </button>
+                    )}
+                </div>
+
                 <button
                     onClick={handleAddNewQuestionClick}
                     title="Yeni Soru Ekle"
                     aria-label="Yeni Soru Ekle"
-                    className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                    className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors hidden sm:block"
                 >
                     <AddIcon className="h-6 w-6" />
                 </button>
                 <button
                   onClick={() => setViewAllNotesMode(prev => !prev)}
                   title={viewAllNotesMode ? "Notları Gizle" : "Tüm Notları Düzenle"}
-                  className={`p-2 rounded-full transition-colors ${viewAllNotesMode ? 'bg-cyan-900/50 text-cyan-400' : 'text-slate-400 hover:bg-slate-700 hover:text-white'}`}
+                  className={`p-2 rounded-full transition-colors hidden sm:block ${viewAllNotesMode ? 'bg-cyan-900/50 text-cyan-400' : 'text-slate-400 hover:bg-slate-700 hover:text-white'}`}
                 >
                     <TextNIcon className="h-6 w-6" />
                 </button>
                 <button 
                   onClick={() => setIsPrintSettingsOpen(true)}
                   title="Soruları Yazdır" 
-                  className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                  className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors hidden sm:block"
                 >
                     <PrinterIcon className="h-6 w-6" />
                 </button>
                 <button 
                   onClick={() => setIsBulkAddModalOpen(true)}
                   title="Metin ile Toplu Soru Ekle" 
-                  className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                  className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors hidden md:block"
                 >
                     <PasteIcon className="h-6 w-6" />
                 </button>
                 <button 
                   onClick={handleImportTrigger} 
                   title="Şablondan Soru Yükle" 
-                  className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                  className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors hidden md:block"
                 >
                     <UploadIcon className="h-6 w-6" />
                 </button>
                 <button 
                   onClick={handleExport} 
                   title="Soruları Şablon Olarak İndir" 
-                  className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+                  className="p-2 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors hidden md:block"
                 >
                     <DownloadIcon className="h-6 w-6" />
                 </button>
+                
+                {/* Mobile Menu for hidden items could go here if needed, keeping simple for now */}
+                
                 <button onClick={onClose} className="p-2 text-slate-400 hover:text-white transition-colors ml-2" title="Kapat">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
@@ -471,21 +519,7 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
             className="hidden"
           />
 
-          <div className="relative mb-4 shrink-0 px-6">
-            <div className="absolute inset-y-0 left-6 pl-3 flex items-center pointer-events-none">
-                <SearchIcon className="h-5 w-5 text-slate-400" />
-            </div>
-            <input
-                type="text"
-                placeholder="Sorular veya ipuçları içinde ara..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-md py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
-                aria-label="Soruları filtrele"
-            />
-          </div>
-
-          <div className="overflow-y-auto px-6 pb-20 md:pb-6 flex-grow">
+          <div className="overflow-y-auto px-6 pb-20 md:pb-6 flex-grow pt-2">
               {filteredQuestions.length > 0 ? (
                   <ul className="space-y-6">
                       {filteredQuestions.map((question) => {

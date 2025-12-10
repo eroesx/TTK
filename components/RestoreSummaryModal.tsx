@@ -30,7 +30,8 @@ const RestoreSummaryModal: React.FC<RestoreSummaryModalProps> = ({
 
   // Initialize list with comparison logic
   useEffect(() => {
-    const currentMap = new Map(currentTopics.map(t => [t.id, t] as [string, Topic]));
+    // FIX: Explicitly specify generic types for Map to ensure values are treated as Topic objects
+    const currentMap = new Map<string, Topic>(currentTopics.map(t => [t.id, t]));
     
     const items: RestoredTopicItem[] = restoredData.topics.map(restoredTopic => {
         const currentTopic = currentMap.get(restoredTopic.id);
