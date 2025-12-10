@@ -155,3 +155,10 @@ export interface ExamConfigModalProps {
   onClose: () => void;
   onStartExam: (config: { questionCount: number; duration: number }) => void;
 }
+
+export interface RestoreSummaryModalProps {
+  currentTopics: Topic[];
+  restoredData: { topics: Topic[]; version: number };
+  onConfirm: (selectedTopics: Topic[]) => void;
+  onCancel: () => void;
+}

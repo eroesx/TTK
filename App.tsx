@@ -129,7 +129,7 @@ const App: React.FC = () => {
   const [isManageFlashcardsModalOpen, setIsManageFlashcardsModalOpen] = useState(false);
 
   const [isRestoreSummaryModalOpen, setIsRestoreSummaryModalOpen] = useState(false);
-  const [restoreData, setRestoreData] = useState<{ topics: Topic[], version: number } | null>(null);
+  const [restoreData, setRestoreData] = useState<{ topics: Topic[], version: number, appTitle?: string } | null>(null);
 
 
   const { saveStatus, onIdle } = useDebouncedSave(topics, appTitle);
@@ -541,9 +541,10 @@ const handleBackupData = () => {
 };
 
 const handleRestoreData = (file: File) => {
-    if (!window.confirm("Yedekten geri yüklemek istediğinizden emin misiniz? Mevcut tüm verileriniz (eklediğiniz konular, sorular, notlar vb.) silinecek ve yedek dosyasındaki verilerle değiştirilecektir.")) {
-      return;
-    }
+    // Only prompt if we are about to overwrite without confirmation logic, 
+    // but here we are just opening the selection modal.
+    // The previous confirm dialog was here, but now we'll move confirmation to the final step or just alert after reading.
+    // Actually, reading the file is safe. Applying it is where we need care.
   
     const reader = new FileReader();
 
@@ -561,10 +562,9 @@ const handleRestoreData = (file: File) => {
           if (restoredData.appTopics && Array.isArray(restoredData.appTopics)) {
             const newTopics = restoredData.appTopics as Topic[];
             const newVersion = (restoredData.appDataVersion as number) ?? 0; // Default to 0 if undefined/null
-            const restoredAppTitle = (restoredData.appTitle as string) ?? 'TTK GÖREVDE YÜKSELME SINAVI';
+            const restoredAppTitle = (restoredData.appTitle as string) ?? undefined;
 
-            setRestoreData({ topics: newTopics, version: newVersion });
-            setAppTitle(restoredAppTitle); // Set app title from restored data
+            setRestoreData({ topics: newTopics, version: newVersion, appTitle: restoredAppTitle });
             setIsRestoreSummaryModalOpen(true);
 
           } else {
@@ -602,18 +602,47 @@ const handleRestoreDefaultData = () => {
     }
 };
 
-const handleConfirmRestore = () => {
+const handleConfirmRestore = (selectedTopics: Topic[]) => {
     if (!restoreData) return;
 
     try {
-        // Set state to trigger debounced save
-        setTopics(restoreData.topics);
-        setAppTitle(appTitle); // appTitle is already set from restoreData preview
+        // Merge logic:
+        // 1. Create a map of current topics for easy access.
+        // 2. Iterate through selected imported topics.
+        // 3. Update or Add them to the map.
+        // 4. Convert back to array.
+        
+        // Note: This logic REPLACES the topic if IDs match, effectively updating it.
+        // It ADDS the topic if the ID is new.
+        // It KEEPS existing topics that were not selected for import.
+        
+        const mergedTopicsMap = new Map(topics.map(t => [t.id, t]));
+        
+        selectedTopics.forEach(importedTopic => {
+            mergedTopicsMap.set(importedTopic.id, importedTopic);
+        });
+        
+        const finalTopics = Array.from(mergedTopicsMap.values());
+
+        // Update state to trigger debounced save
+        setTopics(finalTopics);
+        
+        // Optionally update App Title if present in backup and user confirms?
+        // For now, let's keep current title unless we want to force it. 
+        // The prompt focused on *topics*. If we want to restore title, we could ask.
+        // But usually "Restore Backup" implies full restore. Since we are doing partial,
+        // let's stick to topics. If the user wants the title from backup, they can change it manually or we can update it if it was a full restore.
+        if (restoreData.appTitle) {
+             // Maybe only update if it was a full restore or just update it?
+             // Let's leave appTitle as is to avoid confusion during partial restore.
+             // OR: setAppTitle(restoreData.appTitle); if that's desired behavior. 
+             // Given "which topics to load", imply merging content, not necessarily app settings.
+        }
 
         setIsRestoreSummaryModalOpen(false);
         setRestoreData(null);
 
-        alert('Veriler başarıyla geri yüklendi!');
+        alert(`${selectedTopics.length} konu başarıyla yüklendi/güncellendi!`);
         setCurrentView('home');
         
     } catch (error) {
@@ -627,9 +656,6 @@ const handleConfirmRestore = () => {
 const handleCancelRestore = () => {
     setIsRestoreSummaryModalOpen(false);
     setRestoreData(null);
-    // Reset appTitle if it was changed by restoreData processing but then canceled
-    const savedAppTitle = localStorage.getItem('appTitle');
-    setAppTitle(savedAppTitle || 'TTK GÖREVDE YÜKSELME SINAVI');
 };
 
 const handleAddBulkQuestions = (topicId: string, newQuestions: Question[]) => {

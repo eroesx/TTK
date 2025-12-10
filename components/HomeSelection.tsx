@@ -54,8 +54,8 @@ const HomeSelection: React.FC<HomeSelectionProps> = (props) => {
             <SettingsIcon />
         </button>
 
-       <div className={`${isMobileLayout ? 'mb-4 mt-2' : 'mb-12 mt-12'}`}>
-        <h1 className={`font-extrabold text-white tracking-tight uppercase ${isMobileLayout ? 'text-3xl' : 'text-4xl md:text-5xl'}`}>
+       <div className={`${isMobileLayout ? 'mb-6 mt-12' : 'mb-12 mt-12'} px-4`}>
+        <h1 className={`font-extrabold text-white tracking-tight uppercase ${isMobileLayout ? 'text-2xl' : 'text-4xl md:text-5xl'}`}>
           {appTitle}
         </h1>
       </div>

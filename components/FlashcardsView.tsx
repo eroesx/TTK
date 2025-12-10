@@ -52,11 +52,84 @@ const cardStyles = `
     text-align: center;
     color: #e2e8f0;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden; /* Ensure content stays inside border radius */
   }
 
   .flashcard-back {
     transform: rotateY(180deg);
     justify-content: space-around;
+  }
+
+  /* Rich Text Styles for Flashcards */
+  .flashcard-text {
+    width: 100%;
+    overflow-y: auto;
+    max-height: 100%;
+    /* Scrollbar styling for webkit */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.3) transparent;
+  }
+  .flashcard-text::-webkit-scrollbar {
+    width: 4px;
+  }
+  .flashcard-text::-webkit-scrollbar-thumb {
+    background-color: rgba(255,255,255,0.3);
+    border-radius: 2px;
+  }
+
+  .flashcard-text p {
+    margin-bottom: 0.5em;
+  }
+  .flashcard-text p:last-child {
+    margin-bottom: 0;
+  }
+  .flashcard-text strong, .flashcard-text b {
+    font-weight: 700;
+    color: inherit;
+  }
+  .flashcard-text ul, .flashcard-text ol {
+    padding-left: 1.25em;
+    margin-bottom: 0.5em;
+    text-align: left;
+    display: inline-block;
+  }
+  .flashcard-text ul { list-style-type: disc; }
+  .flashcard-text ol { list-style-type: decimal; }
+
+  /* Front specific typography */
+  .flashcard-front .flashcard-text {
+    font-size: 1.25rem;
+    line-height: 1.5;
+    font-weight: 600;
+    color: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* Back specific typography */
+  .flashcard-back .flashcard-text-main {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    font-weight: 500;
+    color: #ffffff;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  
+  .flashcard-back .flashcard-text-preview {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    opacity: 0.9;
+    max-height: 25%; /* Limit preview height */
+    overflow: hidden;
+    flex-shrink: 0;
+    width: 100%;
   }
 `;
 
@@ -296,11 +369,20 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           <div className="flashcard-container">
             <div className={`flashcard ${isFlipped ? 'flipped' : ''}`} onClick={() => setIsFlipped(!isFlipped)}>
               <div className={`flashcard-front ${cardColors[0]}`}>
-                <p className="text-xl font-semibold px-4">{currentCard.front}</p>
+                <div 
+                    className="flashcard-text" 
+                    dangerouslySetInnerHTML={{ __html: currentCard.front }}
+                />
               </div>
               <div className={`flashcard-back ${cardColors[0]}`}>
-                <p className="text-lg font-medium text-slate-400">{currentCard.front}</p>
-                <p className="text-3xl font-bold">{currentCard.back}</p>
+                <div 
+                    className="flashcard-text flashcard-text-preview" 
+                    dangerouslySetInnerHTML={{ __html: currentCard.front }}
+                />
+                <div 
+                    className="flashcard-text flashcard-text-main" 
+                    dangerouslySetInnerHTML={{ __html: currentCard.back }}
+                />
               </div>
             </div>
           </div>
