@@ -29,6 +29,12 @@ export interface Flashcard {
   back: string;
 }
 
+export interface MistakeItem {
+  topicId: string;
+  questionId: number;
+  timestamp: number;
+}
+
 // Props for components that need to adapt to mobile layout
 export interface MobileLayoutProps {
   isMobileLayout: boolean;
@@ -39,7 +45,9 @@ export interface HomeSelectionProps extends MobileLayoutProps {
   onSelectKonuOzetleri: () => void;
   onSelectBilgiKartlari: () => void;
   onSelectAyarlar: () => void;
-  onSelectDenemeSinavi: () => void; // New prop for Exam Mode
+  onSelectDenemeSinavi: () => void; 
+  onSelectHatalarim: () => void; // New prop for Mistakes Mode
+  mistakeCount: number; // To show count on button
   appTitle: string; 
 }
 
@@ -75,7 +83,7 @@ export interface QuestionState {
 
 export interface QuizViewProps extends MobileLayoutProps {
   topic: Topic;
-  onQuizComplete: (score: number) => void;
+  onQuizComplete: (score: number, history: QuestionState[]) => void; // Updated signature
   onBack: () => void;
   onBackToHome: () => void;
   onDeleteQuestion: (topicId: string, questionId: number) => void;
@@ -84,7 +92,7 @@ export interface QuizViewProps extends MobileLayoutProps {
   questionStates: QuestionState[];
   mobileFontSize: string;
   desktopFontSize: string;
-  mode?: 'practice' | 'exam'; // New mode prop
+  mode?: 'practice' | 'exam' | 'mistakes'; // New mode 'mistakes'
   examDuration?: number; // Duration in minutes for exam mode
 }
 

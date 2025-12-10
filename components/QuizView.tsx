@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { GoogleGenAI } from "@google/genai";
 import type { QuizViewProps, Question, QuestionState } from '../types'; 
 import ProgressBar from './ProgressBar';
 import TrashIcon from './icons/TrashIcon';
@@ -12,6 +13,7 @@ import LightbulbIcon from './icons/LightbulbIcon';
 import ChevronLeftIcon from './icons/ChevronLeftIcon'; 
 import ChevronRightIcon from './icons/ChevronRightIcon'; 
 import HomeIcon from './icons/HomeIcon'; 
+import BrainIcon from './icons/BrainIcon';
 
 declare const Quill: any; 
 
@@ -36,6 +38,11 @@ const QuizView: React.FC<QuizViewProps> = ({
   const [isNoteVisible, setIsNoteVisible] = useState(false);
   const [isHintVisible, setIsHintVisible] = useState(false);
   
+  // AI States
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState('');
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+
   // Timer State for Exam Mode
   const [timeLeft, setTimeLeft] = useState(examDuration * 60); // in seconds
 
@@ -112,6 +119,7 @@ const QuizView: React.FC<QuizViewProps> = ({
     setCurrentQuestionIndex(0); 
     setIsNoteVisible(false);
     setIsHintVisible(false);
+    setAiExplanation('');
     
     if (quillInstanceRef.current && topic.questions.length > 0) {
         quillInstanceRef.current.root.innerHTML = topic.questions[0]?.note || '';
@@ -137,6 +145,10 @@ const QuizView: React.FC<QuizViewProps> = ({
     } else {
         setIsHintVisible(false);
     }
+
+    // Reset AI explanation when changing question
+    setAiExplanation('');
+    setIsAiModalOpen(false);
 
     // FIX: Enhanced focus management for mobile devices.
     // Explicitly blur the active element immediately to prevent sticky focus
@@ -245,6 +257,59 @@ const QuizView: React.FC<QuizViewProps> = ({
 
   const handleToggleHint = () => setIsHintVisible(prev => !prev);
 
+  // AI Explanation Handler
+  const handleGetAiExplanation = async () => {
+    if (!process.env.API_KEY) {
+        alert("AI özelliği için API anahtarı bulunamadı.");
+        return;
+    }
+
+    setIsAiModalOpen(true);
+    if (aiExplanation) return; // Don't fetch again if already fetched
+
+    setIsAiLoading(true);
+    
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const correctOptionLetter = String.fromCharCode(65 + currentQuestion.correctAnswerIndex);
+        const correctOptionText = currentQuestion.options[currentQuestion.correctAnswerIndex];
+        
+        const prompt = `
+        Sen uzman bir öğretmensin. Aşağıdaki çoktan seçmeli soruyu analiz et.
+        
+        Soru: ${currentQuestion.questionText.replace(/<[^>]*>?/gm, '')}
+        Seçenekler:
+        ${currentQuestion.options.map((opt, i) => `${String.fromCharCode(65 + i)}) ${opt}`).join('\n')}
+        
+        Doğru Cevap: ${correctOptionLetter}) ${correctOptionText}
+        
+        Lütfen şunları yap:
+        1. Doğru cevabın neden doğru olduğunu kısaca açıkla.
+        2. Diğer şıkların neden yanlış olduğunu (varsa çeldiricileri) belirt.
+        3. Konuyu pekiştirmek için kısa, akılda kalıcı bir bilgi ver.
+        
+        Cevabı HTML formatında ver (paragraflar <p>, listeler <ul><li> vb. kullan). Sade ve anlaşılır bir dil kullan.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+
+        if (response.text) {
+            setAiExplanation(response.text);
+        } else {
+            setAiExplanation("AI yanıtı alınamadı.");
+        }
+    } catch (error) {
+        console.error("AI Error:", error);
+        setAiExplanation("Bir hata oluştu. Lütfen daha sonra tekrar deneyin.");
+    } finally {
+        setIsAiLoading(false);
+    }
+  };
+
+
   const getButtonClass = (index: number) => {
     const currentQuestionState = quizHistory[currentQuestionIndex];
     if (!currentQuestionState?.isAnswered) {
@@ -319,7 +384,7 @@ const QuizView: React.FC<QuizViewProps> = ({
       autoAdvanceTimeoutRef.current = null;
     }
     const finalScore = quizHistory.filter(q => q.isCorrect).length;
-    onQuizComplete(finalScore);
+    onQuizComplete(finalScore, quizHistory); // Pass full history
   };
   
   if (!currentQuestion) {
@@ -380,8 +445,8 @@ const QuizView: React.FC<QuizViewProps> = ({
       <div className={`${isMobileLayout ? 'flex-none w-full' : 'flex-grow'} flex flex-col ${isMobileLayout ? 'justify-start mt-0' : 'justify-center my-4'} overflow-hidden`}>
         
         {/* Feedback Badge Area - Moved above question text - ONLY IN PRACTICE MODE */}
-        {mode === 'practice' && currentQuestionState?.isAnswered && (
-            <div className="flex justify-center mb-1">
+        {(mode === 'practice' || mode === 'mistakes') && currentQuestionState?.isAnswered && (
+            <div className="flex justify-center mb-1 gap-2">
                 <div
                     onClick={!currentQuestionState.isCorrect ? handleNextQuestion : undefined}
                     className={`py-1 px-4 rounded-full shadow-lg transition-all duration-300 text-sm font-bold uppercase tracking-wider flex items-center gap-2 ${
@@ -394,6 +459,15 @@ const QuizView: React.FC<QuizViewProps> = ({
                         <><IncorrectIcon className="h-5 w-5" /> Yanlış</>
                     )}
                 </div>
+                
+                {/* AI Explanation Button */}
+                <button
+                    onClick={handleGetAiExplanation}
+                    className="py-1 px-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold uppercase tracking-wider flex items-center gap-1 shadow-lg transition-colors border border-indigo-400/50"
+                >
+                    <BrainIcon className="h-4 w-4" />
+                    AI Açıklama
+                </button>
             </div>
         )}
 
@@ -547,6 +621,49 @@ const QuizView: React.FC<QuizViewProps> = ({
           onDelete={handleDelete}
         />
       )}
+
+      {/* AI Explanation Modal */}
+      {isAiModalOpen && (
+        <div 
+            className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[80] animate-fade-in"
+            onClick={() => setIsAiModalOpen(false)}
+        >
+            <div 
+                className="bg-slate-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl relative border border-indigo-500/50 max-h-[80vh] flex flex-col"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="flex items-center gap-3 mb-4 shrink-0">
+                    <div className="p-2 bg-indigo-500/20 rounded-lg">
+                        <BrainIcon className="h-6 w-6 text-indigo-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-indigo-400">Yapay Zeka Açıklaması</h3>
+                    <button onClick={() => setIsAiModalOpen(false)} className="ml-auto text-slate-400 hover:text-white">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                
+                <div className="flex-grow overflow-y-auto pr-2">
+                    {isAiLoading ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-4">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500"></div>
+                            <p>Soru analiz ediliyor, lütfen bekleyin...</p>
+                        </div>
+                    ) : (
+                        <div className="prose-dark text-slate-300 space-y-4">
+                            <div dangerouslySetInnerHTML={{ __html: aiExplanation }} />
+                        </div>
+                    )}
+                </div>
+                
+                <div className="mt-4 pt-4 border-t border-slate-700 flex justify-end">
+                    <button onClick={() => setIsAiModalOpen(false)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md font-semibold transition-colors">
+                        Anladım
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 };
