@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { FlashcardsViewProps, Flashcard, FlashcardSRS } from '../types';
 import { Topic } from '../types';
+import IncorrectIcon from './icons/IncorrectIcon';
+import CorrectIcon from './icons/CorrectIcon';
 import ThreeDotsIcon from './icons/ThreeDotsIcon';
 import EditFlashcardModal from './EditFlashcardModal';
 import AddIcon from './icons/AddIcon';

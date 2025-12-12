@@ -70,7 +70,7 @@ const TopicSelection: React.FC<TopicSelectionProps> = ({
   const handleTopicClick = (topic: Topic) => {
     // FIX: Pass the expected `options` object with default values.
     // This calls the onSelectTopic prop, which in App.tsx opens the QuizConfigModal
-    onSelectTopic(topic, { questionCount: 0, shuffle: false, showHints: false }); // Dummy options, modal will populate
+    onSelectTopic(topic, { questionCount: 0, shuffle: false, showHints: false, filterFavorites: false }); // Dummy options, modal will populate
   };
 
   const sortedTopics = useMemo(() => {

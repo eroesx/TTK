@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import type { QuizViewProps, Question, QuestionState } from '../types'; 
 import ProgressBar from './ProgressBar';
@@ -35,6 +35,7 @@ const QuizView: React.FC<QuizViewProps> = ({
   mode = 'practice',
   examDuration = 0,
   isTextToSpeechEnabled,
+  speechRate, // New Prop
   isAiExplanationEnabled,
 }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -115,14 +116,59 @@ const QuizView: React.FC<QuizViewProps> = ({
     }
   }, [mode, timeLeft]);
 
-  // TTS Cleanup and Trigger on Question Change
-  useEffect(() => {
-      // Stop speaking when question changes or component unmounts
+  // Speech Logic Helper
+  const triggerSpeech = useCallback((textToRead: string) => {
+      if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(textToRead);
+      utterance.lang = 'tr-TR';
+      utterance.rate = speechRate; // Use dynamic rate from settings
+      
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+
+      window.speechSynthesis.speak(utterance);
+  }, [speechRate]);
+
+  const stopSpeech = useCallback(() => {
       if (typeof window !== 'undefined' && window.speechSynthesis) {
           window.speechSynthesis.cancel();
           setIsSpeaking(false);
       }
-  }, [currentQuestionIndex, topic]); // Dependency on index change
+  }, []);
+
+  // Automatic Speech Effect
+  useEffect(() => {
+      // Always stop speech when question changes first
+      stopSpeech();
+
+      // If enabled, read the new question automatically
+      if (isTextToSpeechEnabled && currentQuestion) {
+          // Small delay to allow UI to settle and previous speech to fully cancel
+          const timeoutId = setTimeout(() => {
+              const plainQuestionText = currentQuestion.questionText.replace(/<[^>]+>/g, '').trim();
+              const optionsText = currentQuestion.options.map((opt, idx) => {
+                  const letter = String.fromCharCode(65 + idx);
+                  return `${letter} şıkkı: ${opt}`;
+              }).join('. ');
+
+              const fullText = `Soru: ${plainQuestionText}. ${optionsText}`;
+              triggerSpeech(fullText);
+          }, 500);
+
+          return () => clearTimeout(timeoutId);
+      }
+  }, [currentQuestionIndex, isTextToSpeechEnabled, currentQuestion, triggerSpeech, stopSpeech]);
+
+  // Clean up speech on unmount
+  useEffect(() => {
+      return () => stopSpeech();
+  }, [stopSpeech]);
+
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -287,28 +333,17 @@ const QuizView: React.FC<QuizViewProps> = ({
   };
 
   const handleToggleSpeak = () => {
-      if (!window.speechSynthesis) return;
-
       if (isSpeaking) {
-          window.speechSynthesis.cancel();
-          setIsSpeaking(false);
+          stopSpeech();
       } else {
-          const plainQuestionText = currentQuestion.questionText.replace(/<[^>]+>/g, '');
+          const plainQuestionText = currentQuestion.questionText.replace(/<[^>]+>/g, '').trim();
           const optionsText = currentQuestion.options.map((opt, idx) => {
               const letter = String.fromCharCode(65 + idx);
-              return `${letter} seçeneği: ${opt}`;
+              return `${letter} şıkkı: ${opt}`;
           }).join('. ');
 
-          const textToRead = `${plainQuestionText}. Seçenekler: ${optionsText}`;
-          const utterance = new SpeechSynthesisUtterance(textToRead);
-          utterance.lang = 'tr-TR';
-          utterance.rate = 0.9;
-          
-          utterance.onend = () => setIsSpeaking(false);
-          utterance.onerror = () => setIsSpeaking(false);
-
-          window.speechSynthesis.speak(utterance);
-          setIsSpeaking(true);
+          const fullText = `Soru: ${plainQuestionText}. ${optionsText}`;
+          triggerSpeech(fullText);
       }
   };
 
@@ -540,14 +575,6 @@ const QuizView: React.FC<QuizViewProps> = ({
                     <SpeakerIcon isSpeaking={isSpeaking} className="h-5 w-5" />
                  </button>
              )}
-             {/* Bookmark Button in Header */}
-             <button
-                onClick={handleToggleBookmark}
-                className="p-1.5 rounded-full hover:bg-slate-700 transition-colors"
-                title={currentQuestion.isBookmarked ? "Favorilerden Çıkar" : "Favorilere Ekle"}
-             >
-                <BookmarkIcon isBookmarked={currentQuestion.isBookmarked} className="h-5 w-5" />
-             </button>
         </div>
       </div>
 
@@ -685,6 +712,17 @@ const QuizView: React.FC<QuizViewProps> = ({
                   </button>
                 </>
               )}
+              {/* Bookmark Button - Always Visible (except Exam maybe?) but adding to Practice for now as requested */}
+              {(mode === 'practice' || mode === 'bookmarks' || mode === 'mistakes') && (
+                  <button
+                    onClick={handleToggleBookmark}
+                    className={`p-2.5 rounded-lg transition-all ${currentQuestion.isBookmarked ? 'bg-yellow-900/30 text-yellow-400 hover:bg-yellow-800' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                    title={currentQuestion.isBookmarked ? "Favorilerden Çıkar" : "Favorilere Ekle"}
+                  >
+                      <BookmarkIcon isBookmarked={currentQuestion.isBookmarked} className="h-5 w-5" />
+                  </button>
+              )}
+
               {/* Hide Hint button in Exam Mode */}
               {mode !== 'exam' && (
                 <button

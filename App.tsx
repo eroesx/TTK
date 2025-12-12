@@ -123,6 +123,11 @@ const App: React.FC = () => {
       const saved = localStorage.getItem('isTextToSpeechEnabled');
       return saved ? JSON.parse(saved) : false;
   });
+
+  const [speechRate, setSpeechRate] = useState(() => {
+      const saved = localStorage.getItem('speechRate');
+      return saved ? parseFloat(saved) : 1.1; // Default slightly fast
+  });
   
   const [isAiExplanationEnabled, setIsAiExplanationEnabled] = useState(() => {
       const saved = localStorage.getItem('isAiExplanationEnabled');
@@ -287,27 +292,37 @@ const App: React.FC = () => {
     initializeAppData();
   }, []);
 
-  const handleSelectTopic = (topic: Topic, options: { questionCount: number; shuffle: boolean; showHints: boolean; }) => {
+  const handleSelectTopic = (topic: Topic, options: { questionCount: number; shuffle: boolean; showHints: boolean; filterFavorites: boolean; }) => {
     setQuizMode('practice');
     setExamDuration(0);
     
     let questionsToUse = [...topic.questions];
 
-    // Apply questionCount filter
-    if (options.questionCount > 0 && options.questionCount < questionsToUse.length) {
-      questionsToUse = questionsToUse.slice(0, options.questionCount);
+    // Filter by favorites if option is checked
+    if (options.filterFavorites) {
+        questionsToUse = questionsToUse.filter(q => q.isBookmarked);
+        if (questionsToUse.length === 0) {
+            alert("Bu konuda favori eklenmiş soru bulunmamaktadır.");
+            return;
+        }
     }
-    
+
     // Apply shuffle
     if (options.shuffle) {
       questionsToUse.sort(() => Math.random() - 0.5);
+    }
+
+    // Apply questionCount filter
+    // NOTE: questionCount applies to the filtered list
+    if (options.questionCount > 0 && options.questionCount < questionsToUse.length) {
+        questionsToUse = questionsToUse.slice(0, options.questionCount);
     }
 
     const topicForQuiz = { 
       ...topic, 
       questions: questionsToUse,
       showHints: options.showHints,
-      id: options.shuffle ? `shuffled-${topic.id}-${Date.now()}` : topic.id, // Ensure unique ID for shuffled quiz instance
+      id: (options.shuffle || options.filterFavorites) ? `custom-${topic.id}-${Date.now()}` : topic.id, // Ensure unique ID for custom quiz instance
       originalId: topic.id // Keep track of the original topic ID
     };
 
@@ -742,6 +757,11 @@ const handleToggleTextToSpeech = () => {
     });
 };
 
+const handleUpdateSpeechRate = (rate: number) => {
+    setSpeechRate(rate);
+    localStorage.setItem('speechRate', rate.toString());
+};
+
 const handleToggleAiExplanation = () => {
     setIsAiExplanationEnabled(prev => {
         const newState = !prev;
@@ -1065,6 +1085,7 @@ const handleUpdateDesktopFontSize = (size: string) => {
                                     mode={quizMode}
                                     examDuration={examDuration}
                                     isTextToSpeechEnabled={isTextToSpeechEnabled}
+                                    speechRate={speechRate} // Pass speechRate to QuizView
                                     isAiExplanationEnabled={isAiExplanationEnabled}
                                 />;
       case 'results':
@@ -1126,6 +1147,8 @@ const handleUpdateDesktopFontSize = (size: string) => {
                     onUpdateDesktopFontSize={handleUpdateDesktopFontSize}
                     isTextToSpeechEnabled={isTextToSpeechEnabled}
                     onToggleTextToSpeech={handleToggleTextToSpeech}
+                    speechRate={speechRate} // Pass speechRate to SettingsView
+                    onUpdateSpeechRate={handleUpdateSpeechRate} // Pass handler
                     isAiExplanationEnabled={isAiExplanationEnabled}
                     onToggleAiExplanation={handleToggleAiExplanation}
                 />;

@@ -46,6 +46,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateDesktopFontSize,
   isTextToSpeechEnabled,
   onToggleTextToSpeech,
+  speechRate,
+  onUpdateSpeechRate,
   isAiExplanationEnabled,
   onToggleAiExplanation,
 }) => {
@@ -275,6 +277,32 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-focus:ring-4 peer-focus:ring-cyan-500/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
                 </label>
             </div>
+
+            {/* Speech Rate Slider - Only visible if TTS is enabled */}
+            {isTextToSpeechEnabled && (
+                <div className="flex items-center justify-between gap-4 py-2 pl-12 pr-1 border-b border-slate-800 pb-4">
+                    <div className="flex-grow">
+                        <label htmlFor="speech-rate" className="text-slate-300 font-medium block text-sm">
+                            Konuşma Hızı: <span className="text-cyan-400 font-bold">{speechRate}x</span>
+                        </label>
+                        <input
+                            type="range"
+                            id="speech-rate"
+                            min="0.5"
+                            max="2.0"
+                            step="0.1"
+                            value={speechRate}
+                            onChange={(e) => onUpdateSpeechRate(parseFloat(e.target.value))}
+                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500 mt-2"
+                        />
+                        <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                            <span>Yavaş (0.5x)</span>
+                            <span>Normal (1.0x)</span>
+                            <span>Hızlı (2.0x)</span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* AI Explanation Toggle */}
             <div className="flex items-center justify-between gap-4 py-4 border-t border-slate-800">

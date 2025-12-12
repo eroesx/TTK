@@ -9,6 +9,7 @@ import StarIcon from './icons/StarIcon';
 import SunIcon from './icons/SunIcon';
 import MoonIcon from './icons/MoonIcon';
 import BrainIcon from './icons/BrainIcon';
+import SpeakerIcon from './icons/SpeakerIcon';
 
 declare const Quill: any;
 
@@ -34,6 +35,9 @@ const SummariesView: React.FC<SummariesViewProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiMessage, setAiMessage] = useState('');
 
+  // TTS State
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
   const editorContainerRef = useRef<HTMLDivElement | null>(null);
   const quillInstanceRef = useRef<any>(null);
   const keySequenceRef = useRef<string>('');
@@ -57,6 +61,15 @@ const SummariesView: React.FC<SummariesViewProps> = ({
   const activeTopic = useMemo(() => {
     return topics.find(t => t.id === selectedTopic?.id) || null;
   }, [topics, selectedTopic]);
+
+  // Stop speech when component unmounts or topic changes
+  useEffect(() => {
+    return () => {
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+        }
+    };
+  }, [selectedTopic]);
 
   const handleSave = useCallback(() => {
     if (activeTopic && quillInstanceRef.current) {
@@ -109,6 +122,12 @@ const SummariesView: React.FC<SummariesViewProps> = ({
     if (!editorParent) return;
 
     if (isEditing) {
+      // Stop speech if editing starts
+      if (isSpeaking) {
+          window.speechSynthesis.cancel();
+          setIsSpeaking(false);
+      }
+
       // Set content and make visible
       // Only reset content if it's currently empty or strictly equals the saved summary (to avoid overwriting unsaved work if re-rendering)
       // Ideally, we load it once when entering edit mode.
@@ -130,7 +149,7 @@ const SummariesView: React.FC<SummariesViewProps> = ({
       editorParent.style.display = 'none';
       quill.disable();
     }
-  }, [isEditing, activeTopic]);
+  }, [isEditing, activeTopic, isSpeaking]);
 
 
   // Keyboard shortcut effect
@@ -157,6 +176,33 @@ const SummariesView: React.FC<SummariesViewProps> = ({
     setIsEditing(false); // Always exit editing mode when changing topic
     setSelectedTopic(topic);
     setAiMessage('');
+    setIsSpeaking(false);
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  };
+
+  const handleToggleSpeech = () => {
+      if (!activeTopic || !activeTopic.summary) return;
+
+      if (isSpeaking) {
+          window.speechSynthesis.cancel();
+          setIsSpeaking(false);
+      } else {
+          // Strip HTML tags to get plain text
+          const doc = new DOMParser().parseFromString(activeTopic.summary, 'text/html');
+          const textContent = doc.body.textContent || "";
+
+          if (!textContent.trim()) return;
+
+          const utterance = new SpeechSynthesisUtterance(textContent);
+          utterance.lang = 'tr-TR';
+          utterance.rate = 1.0; // Slightly slower than questions for better comprehension of long text
+          
+          utterance.onend = () => setIsSpeaking(false);
+          utterance.onerror = () => setIsSpeaking(false);
+
+          window.speechSynthesis.speak(utterance);
+          setIsSpeaking(true);
+      }
   };
 
   const handleGenerateAiSummary = async () => {
@@ -322,6 +368,15 @@ const SummariesView: React.FC<SummariesViewProps> = ({
             <h3 className="text-xl font-semibold text-white truncate">{activeTopic.name}</h3>
           </div>
           <div className="flex items-center gap-2">
+            {!isEditing && hasSummaryContent && (
+                <button
+                    onClick={handleToggleSpeech}
+                    className={`p-1.5 rounded-md transition-colors shrink-0 ${isSpeaking ? 'bg-cyan-600 text-white animate-pulse' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+                    title={isSpeaking ? "Okumayı Durdur" : "Sesli Oku"}
+                >
+                    <SpeakerIcon isSpeaking={isSpeaking} className="h-5 w-5" />
+                </button>
+            )}
             {!isEditing && (
               <div className="relative" ref={themeMenuRef}>
                 <button

@@ -66,7 +66,7 @@ export interface HomeSelectionProps extends MobileLayoutProps {
 
 export interface TopicSelectionProps extends MobileLayoutProps {
   topics: Topic[];
-  onSelectTopic: (topic: Topic, options: { questionCount: number; shuffle: boolean; showHints: boolean; }) => void;
+  onSelectTopic: (topic: Topic, options: { questionCount: number; shuffle: boolean; showHints: boolean; filterFavorites: boolean; }) => void;
   onBack: () => void;
   onOpenAddQuestionModal: (topic: Topic) => void;
   onOpenViewQuestionsModal: (topic: Topic) => void;
@@ -110,6 +110,7 @@ export interface QuizViewProps extends MobileLayoutProps {
   mode?: 'practice' | 'exam' | 'mistakes' | 'bookmarks'; // New mode 'bookmarks'
   examDuration?: number; // Duration in minutes for exam mode
   isTextToSpeechEnabled: boolean; // New setting
+  speechRate: number; // New setting for speech speed
   isAiExplanationEnabled: boolean; // New setting
 }
 
@@ -170,6 +171,8 @@ export interface SettingsViewProps {
   onUpdateDesktopFontSize: (size: string) => void;
   isTextToSpeechEnabled: boolean;
   onToggleTextToSpeech: () => void;
+  speechRate: number;
+  onUpdateSpeechRate: (rate: number) => void;
   isAiExplanationEnabled: boolean;
   onToggleAiExplanation: () => void;
 }
@@ -177,7 +180,7 @@ export interface SettingsViewProps {
 export interface QuizConfigModalProps {
   topic: Topic;
   onClose: () => void;
-  onStartQuiz: (topic: Topic, options: { questionCount: number; shuffle: boolean; showHints: boolean; }) => void;
+  onStartQuiz: (topic: Topic, options: { questionCount: number; shuffle: boolean; showHints: boolean; filterFavorites: boolean; }) => void;
 }
 
 export interface ExamConfigModalProps {
