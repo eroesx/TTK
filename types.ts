@@ -8,6 +8,7 @@ export interface Question {
   correctAnswerIndex: number;
   note?: string;
   isBookmarked?: boolean; // New property for flagging questions
+  sourceTopicId?: string; // ID of the topic this question belongs to (useful for mixed quizzes)
 }
 
 export interface Topic {
@@ -108,6 +109,8 @@ export interface QuizViewProps extends MobileLayoutProps {
   desktopFontSize: string;
   mode?: 'practice' | 'exam' | 'mistakes' | 'bookmarks'; // New mode 'bookmarks'
   examDuration?: number; // Duration in minutes for exam mode
+  isTextToSpeechEnabled: boolean; // New setting
+  isAiExplanationEnabled: boolean; // New setting
 }
 
 export interface ResultsViewProps extends MobileLayoutProps {
@@ -165,6 +168,10 @@ export interface SettingsViewProps {
   desktopFontSize: string;
   onUpdateMobileFontSize: (size: string) => void;
   onUpdateDesktopFontSize: (size: string) => void;
+  isTextToSpeechEnabled: boolean;
+  onToggleTextToSpeech: () => void;
+  isAiExplanationEnabled: boolean;
+  onToggleAiExplanation: () => void;
 }
 
 export interface QuizConfigModalProps {

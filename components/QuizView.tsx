@@ -15,6 +15,7 @@ import ChevronRightIcon from './icons/ChevronRightIcon';
 import HomeIcon from './icons/HomeIcon'; 
 import BrainIcon from './icons/BrainIcon';
 import BookmarkIcon from './icons/BookmarkIcon';
+import SpeakerIcon from './icons/SpeakerIcon';
 
 declare const Quill: any; 
 
@@ -33,6 +34,8 @@ const QuizView: React.FC<QuizViewProps> = ({
   desktopFontSize,
   mode = 'practice',
   examDuration = 0,
+  isTextToSpeechEnabled,
+  isAiExplanationEnabled,
 }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [quizHistory, setQuizHistory] = useState<QuestionState[]>(initialQuestionStates);
@@ -45,6 +48,10 @@ const QuizView: React.FC<QuizViewProps> = ({
   const [aiExplanation, setAiExplanation] = useState('');
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
+  // TTS State
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [hasSpeechSupport, setHasSpeechSupport] = useState(false);
+
   // Timer State for Exam Mode
   const [timeLeft, setTimeLeft] = useState(examDuration * 60); // in seconds
 
@@ -55,6 +62,10 @@ const QuizView: React.FC<QuizViewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const quillInstanceRef = useRef<any>(null);
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+      setHasSpeechSupport(typeof window !== 'undefined' && 'speechSynthesis' in window);
+  }, []);
 
   // Initialize Quill instance
   useEffect(() => {
@@ -103,6 +114,15 @@ const QuizView: React.FC<QuizViewProps> = ({
       return () => clearInterval(timer);
     }
   }, [mode, timeLeft]);
+
+  // TTS Cleanup and Trigger on Question Change
+  useEffect(() => {
+      // Stop speaking when question changes or component unmounts
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+          setIsSpeaking(false);
+      }
+  }, [currentQuestionIndex, topic]); // Dependency on index change
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -261,8 +281,35 @@ const QuizView: React.FC<QuizViewProps> = ({
 
   const handleToggleBookmark = (e: React.MouseEvent) => {
       e.stopPropagation();
-      const originalTopicId = topic.originalId || topic.id;
-      onToggleQuestionBookmark(originalTopicId, currentQuestion.id);
+      // Use sourceTopicId if present (mixed mode), otherwise fall back to topic context (originalId or id)
+      const targetTopicId = currentQuestion.sourceTopicId || topic.originalId || topic.id;
+      onToggleQuestionBookmark(targetTopicId, currentQuestion.id);
+  };
+
+  const handleToggleSpeak = () => {
+      if (!window.speechSynthesis) return;
+
+      if (isSpeaking) {
+          window.speechSynthesis.cancel();
+          setIsSpeaking(false);
+      } else {
+          const plainQuestionText = currentQuestion.questionText.replace(/<[^>]+>/g, '');
+          const optionsText = currentQuestion.options.map((opt, idx) => {
+              const letter = String.fromCharCode(65 + idx);
+              return `${letter} seçeneği: ${opt}`;
+          }).join('. ');
+
+          const textToRead = `${plainQuestionText}. Seçenekler: ${optionsText}`;
+          const utterance = new SpeechSynthesisUtterance(textToRead);
+          utterance.lang = 'tr-TR';
+          utterance.rate = 0.9;
+          
+          utterance.onend = () => setIsSpeaking(false);
+          utterance.onerror = () => setIsSpeaking(false);
+
+          window.speechSynthesis.speak(utterance);
+          setIsSpeaking(true);
+      }
   };
 
   // AI Explanation Handler
@@ -483,6 +530,16 @@ const QuizView: React.FC<QuizViewProps> = ({
 
         <div className="text-right flex-1 pl-4 flex items-center justify-end gap-2">
              <h2 className={`font-bold text-cyan-400 ${isMobileLayout ? 'text-sm' : 'text-lg'} truncate max-w-[150px] md:max-w-md`}>{topic.name}</h2>
+             {/* TTS Button - Only visible if enabled in settings AND supported by browser */}
+             {isTextToSpeechEnabled && hasSpeechSupport && (
+                 <button
+                    onClick={handleToggleSpeak}
+                    className={`p-1.5 rounded-full transition-colors ${isSpeaking ? 'bg-cyan-600 text-white animate-pulse' : 'hover:bg-slate-700 text-slate-300'}`}
+                    title={isSpeaking ? "Okumayı Durdur" : "Sesli Oku"}
+                 >
+                    <SpeakerIcon isSpeaking={isSpeaking} className="h-5 w-5" />
+                 </button>
+             )}
              {/* Bookmark Button in Header */}
              <button
                 onClick={handleToggleBookmark}
@@ -522,14 +579,16 @@ const QuizView: React.FC<QuizViewProps> = ({
                     )}
                 </div>
                 
-                {/* AI Explanation Button */}
-                <button
-                    onClick={handleGetAiExplanation}
-                    className="py-1 px-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold uppercase tracking-wider flex items-center gap-1 shadow-lg transition-colors border border-indigo-400/50"
-                >
-                    <BrainIcon className="h-4 w-4" />
-                    AI Açıklama
-                </button>
+                {/* AI Explanation Button - Conditionally Rendered based on settings */}
+                {isAiExplanationEnabled && !currentQuestionState.isCorrect && (
+                    <button
+                        onClick={handleGetAiExplanation}
+                        className="py-1 px-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold uppercase tracking-wider flex items-center gap-1 shadow-lg transition-colors border border-indigo-400/50"
+                    >
+                        <BrainIcon className="h-4 w-4" />
+                        AI Açıklama
+                    </button>
+                )}
             </div>
         )}
 

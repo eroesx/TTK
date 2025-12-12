@@ -118,6 +118,17 @@ const App: React.FC = () => {
   const [mobileFontSize, setMobileFontSize] = useState('text-sm'); 
   const [desktopFontSize, setDesktopFontSize] = useState('text-2xl'); 
 
+  // New Settings State
+  const [isTextToSpeechEnabled, setIsTextToSpeechEnabled] = useState(() => {
+      const saved = localStorage.getItem('isTextToSpeechEnabled');
+      return saved ? JSON.parse(saved) : false;
+  });
+  
+  const [isAiExplanationEnabled, setIsAiExplanationEnabled] = useState(() => {
+      const saved = localStorage.getItem('isAiExplanationEnabled');
+      return saved ? JSON.parse(saved) : false;
+  });
+
   const [quizHistory, setQuizHistory] = useState<QuestionState[]>([]);
   const [mistakes, setMistakes] = useState<MistakeItem[]>([]);
 
@@ -383,7 +394,8 @@ const App: React.FC = () => {
         if (topic) {
             const question = topic.questions.find(q => q.id === mistake.questionId);
             if (question) {
-                mistakeQuestions.push(question);
+                // Inject sourceTopicId so we know where it came from in mixed mode
+                mistakeQuestions.push({ ...question, sourceTopicId: topic.id });
                 validMistakes.push(mistake);
             }
         }
@@ -430,7 +442,8 @@ const App: React.FC = () => {
     topics.forEach(topic => {
       topic.questions.forEach(q => {
         if (q.isBookmarked) {
-          markedQuestions.push(q);
+          // Inject sourceTopicId so we know where it came from
+          markedQuestions.push({ ...q, sourceTopicId: topic.id });
         }
       });
     });
@@ -501,14 +514,14 @@ const App: React.FC = () => {
 
             selectedTopic.questions.forEach((question, index) => {
                 const state = history[index];
-                // Find real topic ID for mixed modes like bookmarks if necessary, 
-                // but since question objects in bookmarks mode refer to original ones, we just need to know their origin topic ID.
-                // However, our data structure doesn't store topicId inside Question. 
-                // So adding to mistakes from "Bookmarks" mode is tricky unless we look up the question in `topics`.
                 
-                // Let's implement lookup for correct topic ID:
+                // Determine the correct topic ID
                 let realTopicId = originalTopicId;
-                if (quizMode === 'bookmarks') {
+                // If the question has a sourceTopicId (e.g. from Favorites mode), use it
+                if (question.sourceTopicId) {
+                    realTopicId = question.sourceTopicId;
+                } else if (quizMode === 'bookmarks') {
+                    // Fallback search if needed, though injection should handle it
                     const foundTopic = topics.find(t => t.questions.some(q => q.id === question.id));
                     if (foundTopic) realTopicId = foundTopic.id;
                 }
@@ -666,13 +679,9 @@ const handleUpdateQuestionNote = (topicId: string, questionId: number, note: str
 const handleToggleQuestionBookmark = (topicId: string, questionId: number) => {
     setTopics(prevTopics => 
         prevTopics.map(topic => {
-            // Optimization: Only scan if the topic might contain the question.
-            // If we know the exact topicId, use it.
-            // If topicId is uncertain (like in mixed quizzes), we might need to search all.
-            // However, the caller usually knows the topicId or we can find it.
-            
-            // For mixed modes where topicId might be different (e.g., 'bookmarks-123' vs real 'history-1'), 
-            // we should search if the question exists in this topic.
+            // STRICT CHECK: Only update if topic ID matches to prevent duplicate ID collision
+            if (topic.id !== topicId) return topic;
+
             const qIndex = topic.questions.findIndex(q => q.id === questionId);
             if (qIndex > -1) {
                 const updatedQuestions = [...topic.questions];
@@ -685,6 +694,24 @@ const handleToggleQuestionBookmark = (topicId: string, questionId: number) => {
             return topic;
         })
     );
+    
+    // Also update selectedTopic if it's currently active (especially for Favorites/Mixed modes visual feedback)
+    setSelectedTopic(prev => {
+        if (!prev) return null;
+        
+        // If we are in mixed mode (like Favorites), we need to update the question inside selectedTopic as well
+        // to show immediate UI feedback, even if the topic ID (e.g. bookmarks-123) doesn't match the main topics.
+        const qIndex = prev.questions.findIndex(q => q.id === questionId);
+        if (qIndex > -1) {
+             const updatedQuestions = [...prev.questions];
+             updatedQuestions[qIndex] = {
+                 ...updatedQuestions[qIndex],
+                 isBookmarked: !updatedQuestions[qIndex].isBookmarked
+             };
+             return { ...prev, questions: updatedQuestions };
+        }
+        return prev;
+    });
 };
 
 const handleUpdateSummary = (topicId: string, newSummary: string) => {
@@ -704,6 +731,22 @@ const handleToggleMobileLayout = () => {
         const newLayoutState = !prev;
         localStorage.setItem('isMobileLayout', JSON.stringify(newLayoutState));
         return newLayoutState;
+    });
+};
+
+const handleToggleTextToSpeech = () => {
+    setIsTextToSpeechEnabled(prev => {
+        const newState = !prev;
+        localStorage.setItem('isTextToSpeechEnabled', JSON.stringify(newState));
+        return newState;
+    });
+};
+
+const handleToggleAiExplanation = () => {
+    setIsAiExplanationEnabled(prev => {
+        const newState = !prev;
+        localStorage.setItem('isAiExplanationEnabled', JSON.stringify(newState));
+        return newState;
     });
 };
 
@@ -1021,6 +1064,8 @@ const handleUpdateDesktopFontSize = (size: string) => {
                                     desktopFontSize={desktopFontSize}
                                     mode={quizMode}
                                     examDuration={examDuration}
+                                    isTextToSpeechEnabled={isTextToSpeechEnabled}
+                                    isAiExplanationEnabled={isAiExplanationEnabled}
                                 />;
       case 'results':
         return selectedTopic && <ResultsView 
@@ -1079,6 +1124,10 @@ const handleUpdateDesktopFontSize = (size: string) => {
                     desktopFontSize={desktopFontSize}
                     onUpdateMobileFontSize={handleUpdateMobileFontSize}
                     onUpdateDesktopFontSize={handleUpdateDesktopFontSize}
+                    isTextToSpeechEnabled={isTextToSpeechEnabled}
+                    onToggleTextToSpeech={handleToggleTextToSpeech}
+                    isAiExplanationEnabled={isAiExplanationEnabled}
+                    onToggleAiExplanation={handleToggleAiExplanation}
                 />;
       case 'home':
       default:

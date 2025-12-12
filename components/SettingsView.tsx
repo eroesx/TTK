@@ -9,6 +9,8 @@ import AddIcon from './icons/AddIcon';
 import { GITHUB_REPO_URL } from '../data/quizData';
 import GitHubIcon from './icons/GitHubIcon';
 import RestoreIcon from './icons/RestoreIcon';
+import SpeakerIcon from './icons/SpeakerIcon';
+import BrainIcon from './icons/BrainIcon';
 
 const mobileFontOptions = [
     { label: 'Küçük (10.5pt)', value: 'text-sm' },
@@ -42,6 +44,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   desktopFontSize,
   onUpdateMobileFontSize,
   onUpdateDesktopFontSize,
+  isTextToSpeechEnabled,
+  onToggleTextToSpeech,
+  isAiExplanationEnabled,
+  onToggleAiExplanation,
 }) => {
   const [selectedTopicId, setSelectedTopicId] = useState<string>(topics[0]?.id || '');
   
@@ -160,7 +166,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* --- App Settings Section --- */}
       <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700 mb-8">
-        <h3 className="text-xl font-bold text-white mb-4">Uygulama ve Görünüm Ayarları</h3>
+        <h3 className="text-xl font-bold text-white mb-4">Görünüm Ayarları</h3>
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -205,6 +211,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-focus:ring-4 peer-focus:ring-cyan-500/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
             </label>
           </div>
+
           <div className="flex items-center justify-between gap-4 py-4 border-t border-slate-800">
             <div>
               <label htmlFor="mobile-font-size" className="text-slate-300 font-medium">
@@ -237,6 +244,62 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               {desktopFontOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* --- Quiz Helpers Section --- */}
+      <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700 mb-8">
+        <h3 className="text-xl font-bold text-white mb-4">Sınav Yardımcıları</h3>
+        <div className="flex flex-col gap-4">
+            {/* Text-to-Speech Toggle */}
+            <div className="flex items-center justify-between gap-4 py-2">
+                <div className="flex items-start gap-3">
+                    <div className="p-2 bg-slate-800 rounded-lg shrink-0">
+                        <SpeakerIcon className="h-6 w-6 text-sky-400" />
+                    </div>
+                    <div>
+                        <label htmlFor="tts-toggle" className="text-slate-300 font-medium cursor-pointer block">
+                            Soruları Sesli Okuma (TTS)
+                        </label>
+                        <p className="text-sm text-slate-500 font-normal mt-1">Soru ekranında metni sesli okutmak için bir buton gösterir.</p>
+                    </div>
+                </div>
+                <label htmlFor="tts-toggle" className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input 
+                        type="checkbox" 
+                        id="tts-toggle" 
+                        className="sr-only peer" 
+                        checked={isTextToSpeechEnabled}
+                        onChange={onToggleTextToSpeech}
+                    />
+                    <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-focus:ring-4 peer-focus:ring-cyan-500/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                </label>
+            </div>
+
+            {/* AI Explanation Toggle */}
+            <div className="flex items-center justify-between gap-4 py-4 border-t border-slate-800">
+                <div className="flex items-start gap-3">
+                    <div className="p-2 bg-slate-800 rounded-lg shrink-0">
+                        <BrainIcon className="h-6 w-6 text-indigo-400" />
+                    </div>
+                    <div>
+                        <label htmlFor="ai-explanation-toggle" className="text-slate-300 font-medium cursor-pointer block">
+                            Yapay Zeka (AI) Açıklama
+                        </label>
+                        <p className="text-sm text-slate-500 font-normal mt-1">Yanlış cevap verdiğinizde sorunun nedenini açıklayan AI butonu gösterir. (Varsayılan: Kapalı)</p>
+                    </div>
+                </div>
+                <label htmlFor="ai-explanation-toggle" className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input 
+                        type="checkbox" 
+                        id="ai-explanation-toggle" 
+                        className="sr-only peer" 
+                        checked={isAiExplanationEnabled}
+                        onChange={onToggleAiExplanation}
+                    />
+                    <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-focus:ring-4 peer-focus:ring-cyan-500/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                </label>
+            </div>
         </div>
       </div>
       
