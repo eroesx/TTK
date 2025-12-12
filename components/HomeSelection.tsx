@@ -7,6 +7,7 @@ import DocumentIcon from './icons/DocumentIcon';
 import SettingsIcon from './icons/SettingsIcon';
 import PenPaperIcon from './icons/PenPaperIcon';
 import ErrorHistoryIcon from './icons/ErrorHistoryIcon';
+import BookmarkIcon from './icons/BookmarkIcon';
 
 const colorClasses = {
     cyan: {
@@ -38,16 +39,23 @@ const colorClasses = {
         hoverBorder: 'hover:border-rose-400',
         focusRing: 'focus:ring-rose-500/50',
         iconBg: 'bg-rose-500/20'
+    },
+    yellow: {
+        bgColor: 'bg-yellow-900/40',
+        hoverBorder: 'hover:border-yellow-400',
+        focusRing: 'focus:ring-yellow-500/50',
+        iconBg: 'bg-yellow-500/20'
     }
 }
 
 const HomeSelection: React.FC<HomeSelectionProps> = (props) => {
-  const { isMobileLayout, appTitle, mistakeCount } = props;
+  const { isMobileLayout, appTitle, mistakeCount, bookmarkCount } = props;
   
   const mainCategories = [
     { id: 'sorular', name: 'Sorular', icon: <QuizIcon />, color: 'cyan', action: 'onSelectSorular' },
     { id: 'deneme-sinavi', name: 'Deneme Sınavı', icon: <PenPaperIcon />, color: 'violet', action: 'onSelectDenemeSinavi' },
     { id: 'hatalarim', name: 'Hatalarım', icon: <ErrorHistoryIcon />, color: 'rose', action: 'onSelectHatalarim', count: mistakeCount },
+    { id: 'favoriler', name: 'Favori Sorular', icon: <BookmarkIcon isBookmarked={true} className="h-10 w-10 text-yellow-400" />, color: 'yellow', action: 'onSelectFavoriSorular', count: bookmarkCount },
     { id: 'bilgi-kartlari', name: 'Bilgi Kartları', icon: <DocumentIcon />, color: 'sky', action: 'onSelectBilgiKartlari' },
     { id: 'ozetler', name: 'Konu Özetleri', icon: <SummaryIcon />, color: 'amber', action: 'onSelectKonuOzetleri' },
   ];
@@ -71,7 +79,7 @@ const HomeSelection: React.FC<HomeSelectionProps> = (props) => {
       <div className={`grid ${isMobileLayout ? 'grid-cols-1 gap-3' : 'md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 max-w-6xl mx-auto'}`}>
         {mainCategories.map((category, index) => {
           const colors = colorClasses[category.color as keyof typeof colorClasses];
-          const action = props[category.action as keyof Omit<HomeSelectionProps, 'isMobileLayout' | 'appTitle' | 'mistakeCount'>];
+          const action = props[category.action as keyof Omit<HomeSelectionProps, 'isMobileLayout' | 'appTitle' | 'mistakeCount' | 'bookmarkCount'>];
 
           return (
             <button
@@ -88,6 +96,12 @@ const HomeSelection: React.FC<HomeSelectionProps> = (props) => {
                 {/* Count Badge for Mistakes */}
                 {category.id === 'hatalarim' && category.count !== undefined && category.count > 0 && (
                     <div className={`absolute ${isMobileLayout ? 'right-4' : 'top-4 right-4'} bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md animate-pulse`}>
+                        {category.count}
+                    </div>
+                )}
+                {/* Count Badge for Bookmarks */}
+                {category.id === 'favoriler' && category.count !== undefined && category.count > 0 && (
+                    <div className={`absolute ${isMobileLayout ? 'right-4' : 'top-4 right-4'} bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full shadow-md`}>
                         {category.count}
                     </div>
                 )}

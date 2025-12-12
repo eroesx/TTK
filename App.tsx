@@ -21,6 +21,7 @@ import RestoreSummaryModal from './components/RestoreSummaryModal';
 import QuizConfigModal from './components/QuizConfigModal';
 import ExamConfigModal from './components/ExamConfigModal';
 import ErrorHistoryIcon from './components/icons/ErrorHistoryIcon';
+import BookmarkIcon from './components/icons/BookmarkIcon';
 
 type View = 'home' | 'topicSelection' | 'quiz' | 'results' | 'summaries' | 'bilgiKartlari' | 'settings';
 
@@ -33,7 +34,10 @@ const generateInitialTopics = (): Topic[] => {
         // Ensure all properties are correctly typed and present
         isFavorite: topic.isFavorite ?? false,
         flashcards: topic.flashcards ?? [],
-        questions: topic.questions.map(q => ({...q})) // Deep copy questions
+        questions: topic.questions.map(q => ({
+            ...q,
+            isBookmarked: q.isBookmarked ?? false
+        })) // Deep copy questions
     }));
 };
 
@@ -123,7 +127,7 @@ const App: React.FC = () => {
 
   // States for ExamConfigModal
   const [isExamConfigModalOpen, setIsExamConfigModalOpen] = useState(false);
-  const [quizMode, setQuizMode] = useState<'practice' | 'exam' | 'mistakes'>('practice');
+  const [quizMode, setQuizMode] = useState<'practice' | 'exam' | 'mistakes' | 'bookmarks'>('practice');
   const [examDuration, setExamDuration] = useState(0);
 
 
@@ -215,7 +219,12 @@ const App: React.FC = () => {
                    ...savedTopic, // override with user's specific data
                    questions: initialTopic.questions.map(q => { // Keep notes on old questions
                        const oldQ = savedTopic.questions.find(old => old.id === q.id);
-                       return oldQ?.note ? {...q, note: oldQ.note} : q;
+                       // Preserve notes and bookmarked status
+                       return {
+                           ...q, 
+                           note: oldQ?.note || q.note,
+                           isBookmarked: oldQ?.isBookmarked || false
+                       };
                    }), 
                    summary: initialTopic.summary, // always overwrite summary with new data
                  };
@@ -416,6 +425,47 @@ const App: React.FC = () => {
     setCurrentView('quiz');
   };
 
+  const handleStartBookmarksQuiz = () => {
+    const markedQuestions: Question[] = [];
+    topics.forEach(topic => {
+      topic.questions.forEach(q => {
+        if (q.isBookmarked) {
+          markedQuestions.push(q);
+        }
+      });
+    });
+
+    if (markedQuestions.length === 0) {
+      alert("Henüz işaretlenmiş favori sorunuz yok. Soruları çözerken veya görüntülerken yıldız simgesine tıklayarak favorilerinize ekleyebilirsiniz.");
+      return;
+    }
+
+    const bookmarkTopic: Topic = {
+      id: `bookmarks-${Date.now()}`,
+      name: "Favori Sorular",
+      iconName: 'Star',
+      color: 'bg-yellow-500/20',
+      bgColor: 'bg-yellow-900/40',
+      questions: markedQuestions,
+      summary: '',
+      flashcards: [],
+      showHints: true
+    };
+
+    setSelectedTopic(bookmarkTopic);
+    setQuizMode('bookmarks');
+    setExamDuration(0);
+
+    setQuizHistory(markedQuestions.map(() => ({
+      selectedAnswerIndex: null,
+      isCorrect: null,
+      isAnswered: false,
+    })));
+
+    setPreviousScore(undefined);
+    setCurrentView('quiz');
+  };
+
   const handleOpenQuizConfigModal = (topic: Topic) => {
     setTopicForQuizConfig(topic);
     setIsQuizConfigModalOpen(true);
@@ -436,60 +486,54 @@ const App: React.FC = () => {
             selectedTopic.questions.forEach((question, index) => {
                 const state = history[index];
                 if (state.isCorrect) {
-                    // Remove this question from mistakes list regardless of topic origin
-                    // But we need to find the original topic ID for each question in mixed mode?
-                    // Actually, mistakeItems store topicId. We need to match based on Question ID.
-                    // Wait, in 'mistakes' mode, questions come from various topics.
-                    // We need to look up their original topic. 
-                    // Optimization: The 'mistakes' array holds the reference.
-                    // Actually, the `mistakeQuestions` array passed to `selectedTopic` are references to real questions.
-                    // But `selectedTopic` structure doesn't hold `topicId` per question.
-                    // FIX: We need to find the mistake entry matching this question.id.
                     const initialLength = newMistakes.length;
                     newMistakes = newMistakes.filter(m => m.questionId !== question.id);
                     if (newMistakes.length !== initialLength) hasMistakeChanges = true;
                 }
-                // If incorrect again, keep it.
             });
         } 
         // If in 'practice' mode, add incorrect questions
-        else if (quizMode === 'practice') {
+        else if (quizMode === 'practice' || quizMode === 'bookmarks') {
              // Store score against the original topic ID
-            lastQuizScores.current = { ...lastQuizScores.current, [originalTopicId]: score };
+             if (quizMode === 'practice') {
+                lastQuizScores.current = { ...lastQuizScores.current, [originalTopicId]: score };
+             }
 
             selectedTopic.questions.forEach((question, index) => {
                 const state = history[index];
+                // Find real topic ID for mixed modes like bookmarks if necessary, 
+                // but since question objects in bookmarks mode refer to original ones, we just need to know their origin topic ID.
+                // However, our data structure doesn't store topicId inside Question. 
+                // So adding to mistakes from "Bookmarks" mode is tricky unless we look up the question in `topics`.
+                
+                // Let's implement lookup for correct topic ID:
+                let realTopicId = originalTopicId;
+                if (quizMode === 'bookmarks') {
+                    const foundTopic = topics.find(t => t.questions.some(q => q.id === question.id));
+                    if (foundTopic) realTopicId = foundTopic.id;
+                }
+
                 if (state.isAnswered && !state.isCorrect) {
                     // Check if already in mistakes
-                    const exists = newMistakes.some(m => m.questionId === question.id && m.topicId === originalTopicId);
+                    const exists = newMistakes.some(m => m.questionId === question.id && m.topicId === realTopicId);
                     if (!exists) {
                         newMistakes.push({
-                            topicId: originalTopicId,
+                            topicId: realTopicId,
                             questionId: question.id,
                             timestamp: Date.now()
                         });
                         hasMistakeChanges = true;
                     }
                 }
-                // Optional: If answering correctly in practice mode, remove from mistakes if it was there?
-                // Yes, "Smart" review usually implies mastery anywhere clears the flag.
+                
                 if (state.isCorrect) {
                      const initialLength = newMistakes.length;
-                     newMistakes = newMistakes.filter(m => !(m.questionId === question.id && m.topicId === originalTopicId));
+                     newMistakes = newMistakes.filter(m => !(m.questionId === question.id && m.topicId === realTopicId));
                      if (newMistakes.length !== initialLength) hasMistakeChanges = true;
                 }
             });
         }
-        // Exam mode: Usually similar to practice, add mistakes.
-        else if (quizMode === 'exam') {
-             // Exam questions might be copies with regenerated IDs (see handleStartExam), so we can't reliably map back to original questions to store as permanent mistakes unless we tracked original IDs.
-             // In handleStartExam: id: Date.now() + idx. This BREAKS persistence for mistakes.
-             // FIX: We should preserve original question IDs in Exam Mode if we want mistake tracking.
-             // For now, disabling mistake tracking in Exam Mode to avoid bug of adding non-existent IDs.
-             // OR: Change handleStartExam to keep IDs? If we keep IDs, we might have duplicate keys if same question appears twice (unlikely in filtered list).
-             // Let's assume for now Exam Mode does NOT affect mistakes pool to stay safe, or implement better ID tracking later.
-        }
-
+        
         if (hasMistakeChanges) {
             setMistakes(newMistakes);
         }
@@ -617,6 +661,30 @@ const handleUpdateQuestionNote = (topicId: string, questionId: number, note: str
         }
         return topic;
     }));
+};
+
+const handleToggleQuestionBookmark = (topicId: string, questionId: number) => {
+    setTopics(prevTopics => 
+        prevTopics.map(topic => {
+            // Optimization: Only scan if the topic might contain the question.
+            // If we know the exact topicId, use it.
+            // If topicId is uncertain (like in mixed quizzes), we might need to search all.
+            // However, the caller usually knows the topicId or we can find it.
+            
+            // For mixed modes where topicId might be different (e.g., 'bookmarks-123' vs real 'history-1'), 
+            // we should search if the question exists in this topic.
+            const qIndex = topic.questions.findIndex(q => q.id === questionId);
+            if (qIndex > -1) {
+                const updatedQuestions = [...topic.questions];
+                updatedQuestions[qIndex] = { 
+                    ...updatedQuestions[qIndex], 
+                    isBookmarked: !updatedQuestions[qIndex].isBookmarked 
+                };
+                return { ...topic, questions: updatedQuestions };
+            }
+            return topic;
+        })
+    );
 };
 
 const handleUpdateSummary = (topicId: string, newSummary: string) => {
@@ -908,6 +976,9 @@ const handleUpdateDesktopFontSize = (size: string) => {
   localStorage.setItem('desktopFontSize', size);
 };
 
+  const totalBookmarkCount = topics.reduce((acc, topic) => 
+    acc + topic.questions.filter(q => q.isBookmarked).length
+  , 0);
 
   if (isLoading) {
     return (
@@ -944,6 +1015,7 @@ const handleUpdateDesktopFontSize = (size: string) => {
                                     onEditQuestion={handleEditQuestion}
                                     isMobileLayout={isMobileLayout}
                                     onUpdateQuestionNote={handleUpdateQuestionNote}
+                                    onToggleQuestionBookmark={handleToggleQuestionBookmark}
                                     questionStates={quizHistory} // Pass quizHistory here
                                     mobileFontSize={mobileFontSize}
                                     desktopFontSize={desktopFontSize}
@@ -1017,7 +1089,9 @@ const handleUpdateDesktopFontSize = (size: string) => {
                     onSelectAyarlar={() => setCurrentView('settings')}
                     onSelectDenemeSinavi={() => setIsExamConfigModalOpen(true)}
                     onSelectHatalarim={handleStartMistakesQuiz}
+                    onSelectFavoriSorular={handleStartBookmarksQuiz}
                     mistakeCount={mistakes.length}
+                    bookmarkCount={totalBookmarkCount}
                     isMobileLayout={isMobileLayout}
                     appTitle={appTitle} // Pass appTitle to HomeSelection
                 />;
@@ -1045,6 +1119,7 @@ const handleUpdateDesktopFontSize = (size: string) => {
           onAddBulkQuestions={handleAddBulkQuestions}
           onReplaceQuestions={handleReplaceQuestions}
           onOpenAddQuestionModal={handleOpenAddQuestionModal}
+          onToggleQuestionBookmark={(questionId) => handleToggleQuestionBookmark(topicForModal.id, questionId)}
         />
       )}
        {isEditTopicModalOpen && topicForModal && (

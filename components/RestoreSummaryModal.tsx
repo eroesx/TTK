@@ -131,11 +131,16 @@ const RestoreSummaryModal: React.FC<RestoreSummaryModalProps> = ({
                                     </svg>
                                 )}
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-grow">
                                 <div className={`font-medium truncate ${item.isSelected ? 'text-white' : 'text-slate-400'}`}>
                                     {item.topic.name}
                                 </div>
-                                <div className="text-xs text-slate-500 flex gap-2">
+                                {item.topic.description && (
+                                    <div className="text-xs text-amber-400/80 italic truncate mt-0.5">
+                                        {item.topic.description}
+                                    </div>
+                                )}
+                                <div className="text-xs text-slate-500 flex gap-2 mt-0.5">
                                     <span>{item.topic.questions.length} Soru</span>
                                     <span>•</span>
                                     <span>{item.topic.flashcards.length} Kart</span>

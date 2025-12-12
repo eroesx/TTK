@@ -14,6 +14,7 @@ import ChevronLeftIcon from './icons/ChevronLeftIcon';
 import ChevronRightIcon from './icons/ChevronRightIcon'; 
 import HomeIcon from './icons/HomeIcon'; 
 import BrainIcon from './icons/BrainIcon';
+import BookmarkIcon from './icons/BookmarkIcon';
 
 declare const Quill: any; 
 
@@ -26,6 +27,7 @@ const QuizView: React.FC<QuizViewProps> = ({
   onEditQuestion, 
   isMobileLayout,
   onUpdateQuestionNote,
+  onToggleQuestionBookmark,
   questionStates: initialQuestionStates, 
   mobileFontSize,
   desktopFontSize,
@@ -257,6 +259,12 @@ const QuizView: React.FC<QuizViewProps> = ({
 
   const handleToggleHint = () => setIsHintVisible(prev => !prev);
 
+  const handleToggleBookmark = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const originalTopicId = topic.originalId || topic.id;
+      onToggleQuestionBookmark(originalTopicId, currentQuestion.id);
+  };
+
   // AI Explanation Handler
   const handleGetAiExplanation = async () => {
     if (!process.env.API_KEY) {
@@ -473,8 +481,16 @@ const QuizView: React.FC<QuizViewProps> = ({
             </div>
         )}
 
-        <div className="text-right flex-1 pl-4">
-             <h2 className={`font-bold text-cyan-400 ${isMobileLayout ? 'text-sm' : 'text-lg'} truncate ml-auto max-w-[150px] md:max-w-md`}>{topic.name}</h2>
+        <div className="text-right flex-1 pl-4 flex items-center justify-end gap-2">
+             <h2 className={`font-bold text-cyan-400 ${isMobileLayout ? 'text-sm' : 'text-lg'} truncate max-w-[150px] md:max-w-md`}>{topic.name}</h2>
+             {/* Bookmark Button in Header */}
+             <button
+                onClick={handleToggleBookmark}
+                className="p-1.5 rounded-full hover:bg-slate-700 transition-colors"
+                title={currentQuestion.isBookmarked ? "Favorilerden Çıkar" : "Favorilere Ekle"}
+             >
+                <BookmarkIcon isBookmarked={currentQuestion.isBookmarked} className="h-5 w-5" />
+             </button>
         </div>
       </div>
 
@@ -491,7 +507,7 @@ const QuizView: React.FC<QuizViewProps> = ({
       <div className={`${isMobileLayout ? 'flex-none w-full' : 'flex-grow'} flex flex-col ${isMobileLayout ? 'justify-start mt-0' : 'justify-center my-4'} overflow-hidden`}>
         
         {/* Feedback Badge Area - Moved above question text - ONLY IN PRACTICE MODE */}
-        {(mode === 'practice' || mode === 'mistakes') && currentQuestionState?.isAnswered && (
+        {(mode === 'practice' || mode === 'mistakes' || mode === 'bookmarks') && currentQuestionState?.isAnswered && (
             <div className="flex justify-center mb-1 gap-2">
                 <div
                     onClick={!currentQuestionState.isCorrect ? handleNextQuestion : undefined}

@@ -13,11 +13,12 @@ import PasteIcon from './icons/PasteIcon';
 import PrinterIcon from './icons/PrinterIcon';
 import TextNIcon from './icons/TextNIcon';
 import LightbulbIcon from './icons/LightbulbIcon';
+import BookmarkIcon from './icons/BookmarkIcon';
 import BulkAddQuestionsModal from './BulkAddQuestionsModal';
 
 declare const Quill: any; // Declare Quill to avoid TypeScript errors
 
-const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose, onEditQuestion, onDeleteQuestion, onAddBulkQuestions, onReplaceQuestions, onOpenAddQuestionModal }) => {
+const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose, onEditQuestion, onDeleteQuestion, onAddBulkQuestions, onReplaceQuestions, onOpenAddQuestionModal, onToggleQuestionBookmark }) => {
   const [questionToEdit, setQuestionToEdit] = useState<Question | null>(null);
   const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -166,6 +167,11 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
         setLastInteractedQuestionId(question.id); // Prepare for potential save
     }
   };
+
+  const handleToggleBookmark = (questionId: number) => {
+      onToggleQuestionBookmark(questionId);
+      setLastInteractedQuestionId(questionId);
+  }
 
   const handleSaveNote = (question: Question) => {
     if (!quillInstanceRef.current || typeof quillInstanceRef.current.root.innerHTML === 'undefined') {
@@ -531,6 +537,13 @@ const ViewQuestionsModal: React.FC<ViewQuestionsModalProps> = ({ topic, onClose,
                             className={`bg-slate-900/50 p-4 rounded-lg border relative group transition-all duration-300 ${isEditingNote ? 'border-cyan-500 ring-1 ring-cyan-500/50 bg-slate-800' : 'border-slate-700 hover:border-slate-500'}`}
                           >
                               <div className="absolute top-2 right-2 flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+                                  <button 
+                                    onClick={() => handleToggleBookmark(question.id)} 
+                                    title={question.isBookmarked ? "Favorilerden Çıkar" : "Favorilere Ekle"} 
+                                    className={`p-2 rounded-full transition-colors ${question.isBookmarked ? 'bg-yellow-900/40 text-yellow-400 hover:bg-yellow-800' : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'}`}
+                                  >
+                                    <BookmarkIcon isBookmarked={question.isBookmarked} className="h-5 w-5" />
+                                  </button>
                                   <button 
                                     onClick={() => handleEditNoteClick(question)} 
                                     title={question.note ? "İpucu/Notu Düzenle" : "İpucu/Not Ekle"} 

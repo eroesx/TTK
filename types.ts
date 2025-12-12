@@ -7,6 +7,7 @@ export interface Question {
   options: string[];
   correctAnswerIndex: number;
   note?: string;
+  isBookmarked?: boolean; // New property for flagging questions
 }
 
 export interface Topic {
@@ -56,7 +57,9 @@ export interface HomeSelectionProps extends MobileLayoutProps {
   onSelectAyarlar: () => void;
   onSelectDenemeSinavi: () => void; 
   onSelectHatalarim: () => void; // New prop for Mistakes Mode
+  onSelectFavoriSorular: () => void; // New prop for Bookmarked Questions
   mistakeCount: number; // To show count on button
+  bookmarkCount: number; // To show count on button
   appTitle: string; 
 }
 
@@ -82,6 +85,7 @@ export interface ViewQuestionsModalProps {
   onAddBulkQuestions: (topicId: string, newQuestions: Question[]) => void;
   onReplaceQuestions: (topicId: string, newQuestions: Question[]) => void;
   onOpenAddQuestionModal: (topic: Topic) => void;
+  onToggleQuestionBookmark: (questionId: number) => void; // New prop
 }
 
 export interface QuestionState {
@@ -98,10 +102,11 @@ export interface QuizViewProps extends MobileLayoutProps {
   onDeleteQuestion: (topicId: string, questionId: number) => void;
   onEditQuestion: (topicId: string, updatedQuestion: Question) => void;
   onUpdateQuestionNote: (topicId: string, questionId: number, note: string) => void;
+  onToggleQuestionBookmark: (topicId: string, questionId: number) => void; // New prop
   questionStates: QuestionState[];
   mobileFontSize: string;
   desktopFontSize: string;
-  mode?: 'practice' | 'exam' | 'mistakes'; // New mode 'mistakes'
+  mode?: 'practice' | 'exam' | 'mistakes' | 'bookmarks'; // New mode 'bookmarks'
   examDuration?: number; // Duration in minutes for exam mode
 }
 

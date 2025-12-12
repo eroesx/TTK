@@ -143,12 +143,7 @@ const cardColors = [
 // SM-2 Algorithm helper
 const calculateSm2 = (card: Flashcard, grade: number): FlashcardSRS => {
     // Grade: 0-2 (Fail), 3 (Hard), 4 (Good), 5 (Easy)
-    // We will map UI buttons to grades: 
-    // "Again" -> 1 (Fail)
-    // "Hard" -> 3
-    // "Good" -> 4
-    // "Easy" -> 5
-
+    
     let { interval, repetition, efactor } = card.srs || { interval: 0, repetition: 0, efactor: 2.5 };
 
     if (grade >= 3) {
@@ -166,7 +161,6 @@ const calculateSm2 = (card: Flashcard, grade: number): FlashcardSRS => {
     } else {
         repetition = 0;
         interval = 1; // Start over
-        // E-factor doesn't change on fail in standard SM-2, or slightly decreases. keeping it simple.
     }
 
     return {
