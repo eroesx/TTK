@@ -386,6 +386,52 @@ const QuizView: React.FC<QuizViewProps> = ({
     const finalScore = quizHistory.filter(q => q.isCorrect).length;
     onQuizComplete(finalScore, quizHistory); // Pass full history
   };
+
+  // Keyboard Shortcuts Effect
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if modals are open or text editing is active
+      if (isEditModalOpen || isAiModalOpen || isNoteVisible) return;
+      
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('contenteditable') === 'true')) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+
+      // Navigation
+      if (key === 'arrowright' || key === 'enter') {
+        handleNextQuestion();
+      } else if (key === 'arrowleft') {
+        handlePrevQuestion();
+      } 
+      // Option Selection (1-5 or A-E)
+      else if (['1', '2', '3', '4', '5'].includes(key)) {
+        const index = parseInt(key) - 1;
+        if (index < currentQuestion.options.length) handleAnswerSelect(index);
+      } else if (['a', 'b', 'c', 'd', 'e'].includes(key)) {
+        const index = key.charCodeAt(0) - 97;
+        if (index < currentQuestion.options.length) handleAnswerSelect(index);
+      }
+      // Toggle Hint
+      else if (key === 'h' && mode !== 'exam' && currentQuestion?.note) {
+        handleToggleHint();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    currentQuestion, 
+    currentQuestionIndex, 
+    isEditModalOpen, 
+    isAiModalOpen, 
+    isNoteVisible, 
+    mode, 
+    quizHistory,
+    topic.questions.length
+  ]);
   
   if (!currentQuestion) {
     return (
@@ -542,7 +588,7 @@ const QuizView: React.FC<QuizViewProps> = ({
       </div>
 
       {/* Footer Controls */}
-      <div className={`${isMobileLayout ? 'mt-1' : 'mt-4'} pt-1 border-t border-slate-700/50 flex flex-nowrap items-center justify-between gap-3 w-full shrink-0`}>
+      <div className={`${isMobileLayout ? 'mt-1' : 'mt-4'} pt-1 border-t border-slate-700/50 flex flex-nowrap items-center justify-between gap-3 w-full shrink-0 relative`}>
           <div className="flex items-center gap-1 flex-shrink-0"> 
               {/* Only show Edit/Note buttons in Practice Mode */}
               {mode === 'practice' && (
@@ -588,7 +634,7 @@ const QuizView: React.FC<QuizViewProps> = ({
                 disabled:opacity-50 disabled:cursor-not-allowed transition-all
                 flex items-center justify-center gap-2 font-medium text-sm
               `}
-              title="Önceki Soru"
+              title="Önceki Soru (Sol Ok)"
             >
               <ChevronLeftIcon className="h-5 w-5" />
               <span className="inline">Önceki</span>
@@ -599,7 +645,7 @@ const QuizView: React.FC<QuizViewProps> = ({
                 h-10 min-w-[6rem] px-4 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 font-bold 
                 transition-all flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/20 text-sm
               `}
-              title={isLastQuestion ? "Testi Bitir" : "Sonraki Soru"}
+              title={isLastQuestion ? "Testi Bitir" : "Sonraki Soru (Sağ Ok / Enter)"}
             >
               <span className="inline">
                 {isLastQuestion ? "Bitir" : "Sonraki"}
@@ -612,6 +658,15 @@ const QuizView: React.FC<QuizViewProps> = ({
             </button>
           </div>
       </div>
+      
+      {/* Desktop Keyboard Hints */}
+      {!isMobileLayout && (
+        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-slate-600 hidden md:flex gap-4 opacity-75 hover:opacity-100 transition-opacity select-none pointer-events-none">
+            <span className="flex items-center gap-1"><kbd className="bg-slate-800 px-1 rounded border border-slate-700 font-mono">←</kbd> <kbd className="bg-slate-800 px-1 rounded border border-slate-700 font-mono">→</kbd> Navigasyon</span>
+            <span className="flex items-center gap-1"><kbd className="bg-slate-800 px-1 rounded border border-slate-700 font-mono">1</kbd>-<kbd className="bg-slate-800 px-1 rounded border border-slate-700 font-mono">5</kbd> Seçim</span>
+            <span className="flex items-center gap-1"><kbd className="bg-slate-800 px-1 rounded border border-slate-700 font-mono">Enter</kbd> İlerle</span>
+        </div>
+      )}
 
       {isEditModalOpen && currentQuestion && (
         <EditQuestionModal

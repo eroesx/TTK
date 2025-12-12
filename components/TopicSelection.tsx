@@ -205,6 +205,11 @@ const TopicSelection: React.FC<TopicSelectionProps> = ({
                     <h3 className={`font-semibold text-white leading-tight ${isMobileLayout ? 'text-base mb-1' : 'text-lg'}`}>
                         {topic.name}
                     </h3>
+                    {topic.description && (
+                        <p className={`text-slate-300/80 italic mb-1 truncate ${isMobileLayout ? 'text-xs' : 'text-xs'}`}>
+                            {topic.description}
+                        </p>
+                    )}
                     <p className={`text-slate-400 ${isMobileLayout ? 'text-xs' : 'text-sm mt-1'}`}>
                         {topic.questions.length} Soru
                     </p>
@@ -245,20 +250,7 @@ const TopicSelection: React.FC<TopicSelectionProps> = ({
                 > <EditIcon /> </button>
               </div>
 
-              {/* Delete Icon - Bottom Right on Desktop, Hidden on Mobile Face (Use Edit/Long Press?) -> For simplicity, keep hidden on mobile or rely on desktop view for admin tasks if screen is too small */}
-              {/* To make it accessible on mobile without clutter, we could add it to the row, but requested layout is just 'better'. 
-                  Let's keep these admin actions on desktop view mostly, or require a tap to reveal if we implemented a menu. 
-                  For now, we hide Add/Edit/Delete on the main mobile card face to keep it clean, users can switch to desktop mode or we assume editing is done on larger screens. 
-                  Actually, let's keep them accessible but maybe via the 'View Questions' modal or similar. 
-                  But wait, the user might need to edit on mobile. Let's add Edit button to mobile row.
-              */}
-               
-               {isMobileLayout && (
-                   // Mobile Specific Actions Container (replaces the desktop ones)
-                   // Actually, let's put Edit next to View.
-                   <div className="hidden"></div>
-               )}
-
+              {/* Delete Icon - Bottom Right on Desktop */}
               <div className={`absolute z-10 transition-opacity duration-300 ${isMobileLayout ? 'bottom-1 right-2 opacity-0' : 'bottom-2 right-2 opacity-0 group-hover:opacity-100'}`}>
                  <button
                   onClick={(e) => { e.stopPropagation(); onDeleteTopic(topic.id); }}
@@ -267,7 +259,7 @@ const TopicSelection: React.FC<TopicSelectionProps> = ({
                 > <TrashIcon /> </button>
               </div>
               
-              {/* Mobile Specific Edit Button (Optional, but good for UX) */}
+              {/* Mobile Specific Edit Button */}
               {isMobileLayout && (
                   <div className="absolute bottom-1 right-14 z-10 opacity-50">
                         <button

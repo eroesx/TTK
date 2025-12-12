@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { GoogleGenAI } from "@google/genai";
 import type { SummariesViewProps, Topic } from '../types';
 import EditIcon from './icons/EditIcon';
 import AddIcon from './icons/AddIcon';
@@ -7,6 +8,7 @@ import TrashIcon from './icons/TrashIcon';
 import StarIcon from './icons/StarIcon';
 import SunIcon from './icons/SunIcon';
 import MoonIcon from './icons/MoonIcon';
+import BrainIcon from './icons/BrainIcon';
 
 declare const Quill: any;
 
@@ -27,6 +29,11 @@ const SummariesView: React.FC<SummariesViewProps> = ({
     return (localStorage.getItem('summaryTheme') as 'light' | 'dark') || 'dark';
   });
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+  
+  // AI States
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiMessage, setAiMessage] = useState('');
+
   const editorContainerRef = useRef<HTMLDivElement | null>(null);
   const quillInstanceRef = useRef<any>(null);
   const keySequenceRef = useRef<string>('');
@@ -59,16 +66,17 @@ const SummariesView: React.FC<SummariesViewProps> = ({
     }
   }, [activeTopic, onUpdateSummary]);
 
-  // Effect to CREATE Quill instance when the editor container is available
+  // Effect to CREATE Quill instance ONCE when a topic is selected.
   useEffect(() => {
-    if (activeTopic && editorContainerRef.current && typeof Quill !== 'undefined' && !quillInstanceRef.current) {
+    if (activeTopic && editorContainerRef.current && !quillInstanceRef.current) {
       const editorElement = document.createElement('div');
       editorContainerRef.current.appendChild(editorElement);
       const quill = new Quill(editorElement, {
         modules: {
           toolbar: [
-            [{ 'header': [1, 2, false] }],
-            ['bold', 'italic', 'underline'],
+            [{ 'header': [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ 'color': [] }, { 'background': [] }],
             [{ 'list': 'ordered' }, { 'list': 'bullet' }],
             [{ 'indent': '-1' }, { 'indent': '+1' }],
             ['clean']
@@ -79,42 +87,50 @@ const SummariesView: React.FC<SummariesViewProps> = ({
       });
       quillInstanceRef.current = quill;
     }
-    // Cleanup: destroy Quill instance when component unmounts or topic changes
+    // Cleanup on topic change.
     return () => {
+      // FIX: Check if quillInstanceRef.current exists and has a destroy method before calling.
       if (quillInstanceRef.current && typeof quillInstanceRef.current.destroy === 'function') {
         quillInstanceRef.current.destroy();
       }
       quillInstanceRef.current = null;
       if (editorContainerRef.current) {
-        editorContainerRef.current.innerHTML = ''; // Clear container on unmount
+        editorContainerRef.current.innerHTML = '';
       }
     };
-  }, [activeTopic]); // Depend on activeTopic so it re-runs when entering detailed view
+  }, [activeTopic]);
 
   // Effect to manage visibility, content, and state of the EXISTING Quill instance.
   useEffect(() => {
     const quill = quillInstanceRef.current;
-    if (!quill) return; // Only proceed if Quill instance exists
+    if (!quill) return;
 
     const editorParent = editorContainerRef.current;
     if (!editorParent) return;
 
     if (isEditing) {
       // Set content and make visible
-      // Only set content if it's vastly different to avoid cursor jumps, or if we just entered edit mode
-      if (quill.root.innerHTML !== (activeTopic?.summary || '')) {
+      // Only reset content if it's currently empty or strictly equals the saved summary (to avoid overwriting unsaved work if re-rendering)
+      // Ideally, we load it once when entering edit mode.
+      // Here we rely on the component mount logic mostly.
+      if (quill.root.innerHTML === '<p><br></p>' || quill.root.innerHTML === activeTopic?.summary) {
          quill.root.innerHTML = activeTopic?.summary || '';
       }
+      
       editorParent.style.display = 'block';
       quill.enable();
-      // Focus after a short delay to ensure visibility
+      // Increase editor height in edit mode
+      const editorDiv = editorParent.querySelector('.ql-editor');
+      if(editorDiv) {
+          (editorDiv as HTMLElement).style.minHeight = '400px';
+      }
       setTimeout(() => quill.focus(), 0);
     } else {
       // Hide
       editorParent.style.display = 'none';
       quill.disable();
     }
-  }, [isEditing, activeTopic]); 
+  }, [isEditing, activeTopic]);
 
 
   // Keyboard shortcut effect
@@ -134,11 +150,77 @@ const SummariesView: React.FC<SummariesViewProps> = ({
 
   const handleCancel = () => {
     setIsEditing(false);
+    setAiMessage('');
   };
   
   const selectTopic = (topic: Topic | null) => {
     setIsEditing(false); // Always exit editing mode when changing topic
     setSelectedTopic(topic);
+    setAiMessage('');
+  };
+
+  const handleGenerateAiSummary = async () => {
+    if (!process.env.API_KEY) {
+        alert("API anahtarı bulunamadı.");
+        return;
+    }
+    if (!activeTopic) return;
+    if (activeTopic.questions.length === 0) {
+        alert("Bu konuda analiz edilecek soru bulunmuyor. Lütfen önce soru ekleyin.");
+        return;
+    }
+
+    if (!window.confirm("Mevcut özetin üzerine, bu konudaki soruların analizinden elde edilen yeni bir özet yazılacak. Devam etmek istiyor musunuz?")) {
+        return;
+    }
+
+    setIsGenerating(true);
+    setAiMessage('Sorular analiz ediliyor ve özet oluşturuluyor...');
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        // Prepare questions data for the prompt
+        const questionsText = activeTopic.questions.map((q, i) => 
+            `Soru ${i+1}: ${q.questionText}\nDoğru Cevap: ${q.options[q.correctAnswerIndex]}`
+        ).join('\n\n');
+
+        const prompt = `
+          Sen uzman bir eğitmen ve sınav hazırlayıcısısın.
+          Aşağıda "${activeTopic.name}" konusuyla ilgili hazırlanmış sorular ve doğru cevapları yer almaktadır.
+          
+          GÖREVİN:
+          Bu soruları analiz ederek, öğrencilerin bu konuyu kavramasını sağlayacak, sınavlarda çıkması muhtemel bilgileri içeren, KAPSAMLI ve ÖĞRETİCİ bir konu özeti hazırla.
+          
+          KURALLAR:
+          1. Çıktı HTML formatında olmalıdır. (Sadece body içeriği, html/head tagleri yok).
+          2. <h3>, <h4>, <strong>, <ul>, <li>, <p> gibi etiketleri kullanarak okunabilirliği artır.
+          3. Sadece sorulardaki bilgilere bağlı kalma, sorulardan yola çıkarak konunun ilgili kısımlarını bütünlüklü anlat.
+          4. Önemli terimleri ve anahtar kavramları **kalın** (strong) yaz.
+          
+          SORULAR VE CEVAPLAR:
+          ${questionsText}
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+
+        if (response.text) {
+            if (quillInstanceRef.current) {
+                // Strip markdown code blocks if present (```html ... ```)
+                let cleanHtml = response.text.replace(/^```html/, '').replace(/```$/, '').trim();
+                quillInstanceRef.current.root.innerHTML = cleanHtml;
+                setAiMessage('Özet başarıyla oluşturuldu! Düzenleyip kaydedebilirsiniz.');
+            }
+        }
+    } catch (error) {
+        console.error("AI Error:", error);
+        setAiMessage('Özet oluşturulurken bir hata meydana geldi.');
+    } finally {
+        setIsGenerating(false);
+    }
   };
 
   const sortedTopics = useMemo(() => {
@@ -227,7 +309,7 @@ const SummariesView: React.FC<SummariesViewProps> = ({
   return (
     <div className="relative bg-slate-800/50 p-6 md:p-8 rounded-2xl shadow-2xl w-full max-w-4xl mx-auto animate-fade-in">
        <button onClick={() => selectTopic(null)} aria-label="Konu listesine geri dön" className="absolute top-6 left-6 text-slate-400 hover:text-white transition-colors duration-200 z-10 flex items-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
         <span>Konular</span>
       </button>
 
@@ -279,6 +361,38 @@ const SummariesView: React.FC<SummariesViewProps> = ({
             )}
           </div>
         </div>
+        
+        {/* AI Generator Section - Only visible in Edit Mode */}
+        {isEditing && (
+            <div className="p-3 bg-indigo-900/20 border-b border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-indigo-300 text-sm">
+                    <BrainIcon className="h-5 w-5" />
+                    <span>Yapay Zeka Asistanı</span>
+                </div>
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    {isGenerating ? (
+                        <div className="flex items-center gap-2 text-slate-300 text-sm">
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <span>Oluşturuluyor...</span>
+                        </div>
+                    ) : (
+                        <button 
+                            onClick={handleGenerateAiSummary}
+                            className="flex-grow md:flex-none px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded shadow-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                            <BrainIcon className="h-4 w-4" />
+                            Sorulardan Özet Oluştur / Güncelle
+                        </button>
+                    )}
+                </div>
+            </div>
+        )}
+        {aiMessage && isEditing && (
+            <div className="bg-indigo-900/40 px-4 py-2 text-xs text-center text-indigo-200 border-b border-indigo-500/20">
+                {aiMessage}
+            </div>
+        )}
+
         <div className={`p-6 overflow-y-auto flex-grow min-h-[50vh] rounded-b-lg transition-colors duration-300 ${isEditing ? 'bg-slate-900/30' : (summaryTheme === 'light' ? 'bg-gray-50' : 'bg-slate-900/30')}`}>
           
           <div ref={editorContainerRef} style={{ display: 'none' }} />

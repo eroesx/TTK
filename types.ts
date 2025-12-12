@@ -12,6 +12,7 @@ export interface Question {
 export interface Topic {
   id: string;
   name: string;
+  description?: string; // Konu kartında görünecek kısa not/açıklama
   iconName: string;
   questions: Question[];
   color: string;
@@ -23,10 +24,18 @@ export interface Topic {
   showHints?: boolean; // To show hints during the quiz
 }
 
+export interface FlashcardSRS {
+  interval: number; // Days until next review
+  repetition: number; // Consecutive correct answers
+  efactor: number; // Easiness factor (starts at 2.5)
+  dueDate: number; // Timestamp for next review
+}
+
 export interface Flashcard {
   id: number;
   front: string;
   back: string;
+  srs?: FlashcardSRS; // Optional SRS data
 }
 
 export interface MistakeItem {
@@ -117,6 +126,7 @@ export interface FlashcardsViewProps extends MobileLayoutProps {
     onOpenBulkAddModal: (topic: Topic) => void;
     onOpenBulkUpdateModal: (topic: Topic) => void;
     onOpenManageCardsModal: (topic: Topic) => void;
+    onUpdateFlashcardSRS: (topicId: string, cardId: number, srsData: FlashcardSRS) => void;
 }
 
 export interface SummariesViewProps extends MobileLayoutProps {

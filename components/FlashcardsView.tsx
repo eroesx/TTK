@@ -1,9 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { FlashcardsViewProps, Flashcard } from '../types';
+import type { FlashcardsViewProps, Flashcard, FlashcardSRS } from '../types';
 import { Topic } from '../types';
-import IncorrectIcon from './icons/IncorrectIcon';
-import CorrectIcon from './icons/CorrectIcon';
 import ThreeDotsIcon from './icons/ThreeDotsIcon';
 import EditFlashcardModal from './EditFlashcardModal';
 import AddIcon from './icons/AddIcon';
@@ -142,6 +140,50 @@ const cardColors = [
   'bg-violet-900/80',
 ];
 
+// SM-2 Algorithm helper
+const calculateSm2 = (card: Flashcard, grade: number): FlashcardSRS => {
+    // Grade: 0-2 (Fail), 3 (Hard), 4 (Good), 5 (Easy)
+    // We will map UI buttons to grades: 
+    // "Again" -> 1 (Fail)
+    // "Hard" -> 3
+    // "Good" -> 4
+    // "Easy" -> 5
+
+    let { interval, repetition, efactor } = card.srs || { interval: 0, repetition: 0, efactor: 2.5 };
+
+    if (grade >= 3) {
+        if (repetition === 0) {
+            interval = 1;
+        } else if (repetition === 1) {
+            interval = 6;
+        } else {
+            interval = Math.round(interval * efactor);
+        }
+        repetition++;
+        // SM-2 formula for E-Factor
+        efactor = efactor + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02));
+        if (efactor < 1.3) efactor = 1.3;
+    } else {
+        repetition = 0;
+        interval = 1; // Start over
+        // E-factor doesn't change on fail in standard SM-2, or slightly decreases. keeping it simple.
+    }
+
+    return {
+        interval,
+        repetition,
+        efactor,
+        dueDate: Date.now() + (interval * 24 * 60 * 60 * 1000)
+    };
+};
+
+const formatInterval = (days: number) => {
+    if (days === 1) return '1 gün';
+    if (days < 30) return `${days} gün`;
+    if (days < 365) return `${Math.round(days/30)} ay`;
+    return `${Math.round(days/365)} yıl`;
+};
+
 
 const FlashcardsView: React.FC<FlashcardsViewProps> = ({ 
   onBack, 
@@ -155,7 +197,8 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   onToggleFavorite,
   availableIcons,
   onOpenBulkAddModal,
-  onOpenManageCardsModal
+  onOpenManageCardsModal,
+  onUpdateFlashcardSRS
 }) => {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [deck, setDeck] = useState<Flashcard[]>([]);
@@ -183,7 +226,14 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
         const currentTopicState = topics.find(t => t.id === selectedTopic.id);
         if (currentTopicState) {
             setDeck(currentTopicState.flashcards);
-            setStudyDeck(currentTopicState.flashcards);
+            
+            // Organize Study Deck: Due Cards -> New Cards -> Future Cards
+            const now = Date.now();
+            const due = currentTopicState.flashcards.filter(c => c.srs && c.srs.dueDate <= now);
+            const newCards = currentTopicState.flashcards.filter(c => !c.srs);
+            const future = currentTopicState.flashcards.filter(c => c.srs && c.srs.dueDate > now).sort((a,b) => (a.srs!.dueDate - b.srs!.dueDate));
+            
+            setStudyDeck([...due, ...newCards, ...future]);
             setBrowseIndex(0);
         }
         setIsFlipped(false);
@@ -204,17 +254,26 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     setSelectedTopic(null);
   };
 
-  const triggerSwipe = (direction: 'left' | 'right') => {
-    if (studyDeck.length === 0) return;
+  const handleRateCard = (grade: number) => {
+      if (studyDeck.length === 0 || !selectedTopic) return;
+      
+      const currentCard = studyDeck[0];
+      const newSRS = calculateSm2(currentCard, grade);
+      
+      // Update data in global state
+      onUpdateFlashcardSRS(selectedTopic.id, currentCard.id, newSRS);
 
-    setStudyDeck(prev => {
-        const topCard = prev[0];
-        const rest = prev.slice(1);
-        // 'left' is 'Bilmiyorum' -> move to back
-        // 'right' is 'Biliyorum' -> remove from deck for this session
-        return direction === 'left' ? [...rest, topCard] : rest;
-    });
-    setIsFlipped(false);
+      // Move card based on logic
+      setStudyDeck(prev => {
+          const rest = prev.slice(1);
+          // If graded 'Again' (grade 1), re-queue it at the end of the session to review again today
+          if (grade < 3) {
+              return [...rest, currentCard]; 
+          }
+          // If correct, remove from session
+          return rest;
+      });
+      setIsFlipped(false);
   };
   
   const handleBrowse = (direction: 'next' | 'prev') => {
@@ -268,6 +327,7 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
         <div className={`grid ${isMobileLayout ? 'grid-cols-1' : 'md:grid-cols-3'} gap-6`}>
           {sortedTopics.map((topic, index) => {
               const iconComponent = availableIcons.find(icon => icon.name === topic.iconName)?.component;
+              const dueCount = topic.flashcards.filter(c => !c.srs || c.srs.dueDate <= Date.now()).length;
               
               return (
               <div key={topic.id} className="relative group animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
@@ -275,8 +335,13 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
                     onClick={() => setSelectedTopic(topic)}
                     className={`w-full h-48 flex flex-col items-center justify-center p-6 rounded-xl shadow-lg transition-all duration-300 ease-in-out transform hover:-translate-y-1 bg-white/10 hover:bg-white/20 cursor-pointer focus:outline-none focus:ring-4 focus:ring-cyan-500/50`}
                   >
-                    <div className={`p-3 rounded-full mb-3 transition-transform duration-300 group-hover:scale-110 ${topic.color}`}>
+                    <div className={`p-3 rounded-full mb-3 transition-transform duration-300 group-hover:scale-110 ${topic.color} relative`}>
                         {iconComponent}
+                        {dueCount > 0 && (
+                            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border border-slate-800">
+                                {dueCount}
+                            </span>
+                        )}
                     </div>
                     <h3 className="text-lg text-center font-semibold text-white">{topic.name}</h3>
                     <p className="text-slate-400 text-sm mt-1">{topic.flashcards.length} Kart</p>
@@ -329,8 +394,25 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     );
   }
 
+  // Calculate intervals for the buttons based on the current card
+  let btnIntervals = { again: '1 dk', hard: '1 gün', good: '1 gün', easy: '4 gün' };
+  if (currentCard) {
+      // Simulate next intervals without saving
+      const s1 = calculateSm2({...currentCard}, 1);
+      const s3 = calculateSm2({...currentCard}, 3);
+      const s4 = calculateSm2({...currentCard}, 4);
+      const s5 = calculateSm2({...currentCard}, 5);
+      
+      btnIntervals = {
+          again: '1 dk', // Fail always resets to short term
+          hard: formatInterval(s3.interval),
+          good: formatInterval(s4.interval),
+          easy: formatInterval(s5.interval)
+      };
+  }
+
   return (
-    <div className="flex flex-col items-center justify-between w-full h-[85vh] min-h-[550px] animate-fade-in">
+    <div className="flex flex-col items-center justify-between w-full h-[90vh] min-h-[600px] animate-fade-in">
       <div className="w-full flex justify-between items-center text-white relative">
         <button onClick={handleBackToTopicSelection} className="text-slate-300 hover:text-white transition-colors duration-200 z-10 p-2 flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -361,10 +443,10 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
               <input type="checkbox" id="study-mode-toggle" className="sr-only peer" checked={studyMode} onChange={() => setStudyMode(p => !p)} />
               <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-focus:ring-4 peer-focus:ring-cyan-500/50 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
           </label>
-          <label htmlFor="study-mode-toggle" className="text-slate-300 font-medium cursor-pointer text-sm">Çalışma Modu</label>
+          <label htmlFor="study-mode-toggle" className="text-slate-300 font-medium cursor-pointer text-sm">Aralıklı Tekrar</label>
       </div>
 
-      <div className="w-full max-w-sm h-96 flex-grow flex items-center justify-center">
+      <div className="w-full max-w-lg h-96 flex-grow flex items-center justify-center relative">
         {currentCard ? (
           <div className="flashcard-container">
             <div className={`flashcard ${isFlipped ? 'flipped' : ''}`} onClick={() => setIsFlipped(!isFlipped)}>
@@ -373,6 +455,9 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
                     className="flashcard-text" 
                     dangerouslySetInnerHTML={{ __html: currentCard.front }}
                 />
+                {!isFlipped && studyMode && (
+                    <div className="absolute bottom-4 text-xs text-slate-400 animate-pulse">Cevabı görmek için dokun</div>
+                )}
               </div>
               <div className={`flashcard-back ${cardColors[0]}`}>
                 <div 
@@ -389,27 +474,45 @@ const FlashcardsView: React.FC<FlashcardsViewProps> = ({
         ) : (
           <div className="text-center text-white p-8 bg-white/10 rounded-xl">
             <h3 className="text-3xl font-bold mb-2">Harika iş!</h3>
-            <p className="text-slate-300">{studyMode ? 'Bu konudaki tüm kartları tamamladın.' : 'Bu konuda hiç kart yok.'}</p>
+            <p className="text-slate-300">{studyMode ? 'Bu konudaki çalışma sırası gelen tüm kartları tamamladın.' : 'Bu konuda hiç kart yok.'}</p>
           </div>
         )}
       </div>
 
-      <div className="flex gap-8 items-center mt-4 min-h-[80px]">
+      <div className="flex gap-2 items-center justify-center mt-4 w-full px-2 min-h-[80px]">
         {studyMode ? (
-          <>
-            <button onClick={() => triggerSwipe('left')} disabled={!currentCard} className="w-20 h-20 flex items-center justify-center bg-rose-600/80 rounded-full text-white shadow-lg hover:bg-rose-500 disabled:opacity-50 transition-all transform hover:scale-110">
-              <IncorrectIcon className="h-8 w-8" />
-            </button>
-            <button onClick={() => triggerSwipe('right')} disabled={!currentCard} className="w-20 h-20 flex items-center justify-center bg-green-600/80 rounded-full text-white shadow-lg hover:bg-green-500 disabled:opacity-50 transition-all transform hover:scale-110">
-              <CorrectIcon className="h-8 w-8" />
-            </button>
-          </>
+          isFlipped && currentCard ? (
+            <div className="grid grid-cols-4 gap-2 w-full max-w-lg">
+                <button onClick={(e) => { e.stopPropagation(); handleRateCard(1); }} className="flex flex-col items-center justify-center p-2 rounded-lg bg-red-900/80 hover:bg-red-800 border border-red-700/50 transition-colors">
+                    <span className="text-sm font-bold text-red-200">Tekrar</span>
+                    <span className="text-xs text-red-400">{btnIntervals.again}</span>
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); handleRateCard(3); }} className="flex flex-col items-center justify-center p-2 rounded-lg bg-orange-900/80 hover:bg-orange-800 border border-orange-700/50 transition-colors">
+                    <span className="text-sm font-bold text-orange-200">Zor</span>
+                    <span className="text-xs text-orange-400">{btnIntervals.hard}</span>
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); handleRateCard(4); }} className="flex flex-col items-center justify-center p-2 rounded-lg bg-blue-900/80 hover:bg-blue-800 border border-blue-700/50 transition-colors">
+                    <span className="text-sm font-bold text-blue-200">İyi</span>
+                    <span className="text-xs text-blue-400">{btnIntervals.good}</span>
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); handleRateCard(5); }} className="flex flex-col items-center justify-center p-2 rounded-lg bg-green-900/80 hover:bg-green-800 border border-green-700/50 transition-colors">
+                    <span className="text-sm font-bold text-green-200">Kolay</span>
+                    <span className="text-xs text-green-400">{btnIntervals.easy}</span>
+                </button>
+            </div>
+          ) : (
+             currentCard && (
+                <button onClick={() => setIsFlipped(true)} className="px-8 py-3 bg-slate-700 hover:bg-slate-600 rounded-full font-semibold text-white shadow-lg transition-colors w-full max-w-xs">
+                    Cevabı Göster
+                </button>
+             )
+          )
         ) : (
           <>
-            <button onClick={() => handleBrowse('prev')} disabled={!currentCard} className="w-20 h-20 flex items-center justify-center bg-slate-700/80 rounded-full text-white shadow-lg hover:bg-slate-600 disabled:opacity-50 transition-all transform hover:scale-110">
+            <button onClick={() => handleBrowse('prev')} disabled={!currentCard} className="w-16 h-16 flex items-center justify-center bg-slate-700/80 rounded-full text-white shadow-lg hover:bg-slate-600 disabled:opacity-50 transition-all transform hover:scale-110">
               <ChevronLeftIcon />
             </button>
-            <button onClick={() => handleBrowse('next')} disabled={!currentCard} className="w-20 h-20 flex items-center justify-center bg-slate-700/80 rounded-full text-white shadow-lg hover:bg-slate-600 disabled:opacity-50 transition-all transform hover:scale-110">
+            <button onClick={() => handleBrowse('next')} disabled={!currentCard} className="w-16 h-16 flex items-center justify-center bg-slate-700/80 rounded-full text-white shadow-lg hover:bg-slate-600 disabled:opacity-50 transition-all transform hover:scale-110">
               <ChevronRightIcon />
             </button>
           </>

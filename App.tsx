@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { Topic, Question, Flashcard, QuestionState, MistakeItem } from './types';
+import type { Topic, Question, Flashcard, QuestionState, MistakeItem, FlashcardSRS } from './types';
 import { availableIcons, availableColorPalettes, DATA_VERSION } from './data/quizData';
 import { defaultBackupData } from './data/defaultBackupData';
 import TopicSelection from './components/TopicSelection';
@@ -207,13 +208,13 @@ const App: React.FC = () => {
             const migratedTopics = generatedInitialTopics.map(initialTopic => {
               const savedVersionOfTopic = savedTopics.find(st => st.id === initialTopic.id);
               if (savedVersionOfTopic) {
+                 const savedTopic = savedVersionOfTopic;
                  // Preserve user data (favorites, notes, etc.) while updating core content
                  return {
                    ...initialTopic, // take structure and core content from new data
-                   ...savedVersionOfTopic, // override with user's specific data
+                   ...savedTopic, // override with user's specific data
                    questions: initialTopic.questions.map(q => { // Keep notes on old questions
-                       // Cast to Topic to ensure 'questions' property access is valid
-                       const oldQ = (savedVersionOfTopic as Topic).questions.find(old => old.id === q.id);
+                       const oldQ = savedTopic.questions.find(old => old.id === q.id);
                        return oldQ?.note ? {...q, note: oldQ.note} : q;
                    }), 
                    summary: initialTopic.summary, // always overwrite summary with new data
@@ -363,7 +364,7 @@ const App: React.FC = () => {
     const mistakeQuestions: Question[] = [];
     
     // Iterate efficiently
-    const topicMap = new Map(topics.map(t => [t.id, t]));
+    const topicMap = new Map<string, Topic>(topics.map(t => [t.id, t]));
     
     // Clean up valid mistakes (remove orphans if topic/question deleted)
     const validMistakes: MistakeItem[] = [];
@@ -867,6 +868,23 @@ const handleDeleteFlashcard = (topicId: string, cardId: number) => {
     );
 };
 
+// Handler for updating Flashcard SRS data
+const handleUpdateFlashcardSRS = (topicId: string, cardId: number, srsData: FlashcardSRS) => {
+    setTopics(prevTopics => 
+        prevTopics.map(topic => {
+            if (topic.id === topicId) {
+                return {
+                    ...topic,
+                    flashcards: topic.flashcards.map(card => 
+                        card.id === cardId ? { ...card, srs: srsData } : card
+                    )
+                };
+            }
+            return topic;
+        })
+    );
+};
+
 const handleSyncData = async () => {
     if (!window.confirm("Soru bankasını en güncel haliyle senkronize etmek istediğinizden emin misiniz? Bu işlem, mevcut konuların sorularını ve özetlerini günceller. Sizin eklediğiniz özel konular ve notlar korunacaktır.")) {
         return;
@@ -968,6 +986,7 @@ const handleUpdateDesktopFontSize = (size: string) => {
                     onOpenBulkAddModal={(topic) => { setTopicForModal(topic); setIsBulkAddFlashcardsModalOpen(true); }}
                     onOpenBulkUpdateModal={(topic) => { setTopicForModal(topic); setIsBulkUpdateFlashcardsModalOpen(true); }}
                     onOpenManageCardsModal={(topic) => { setTopicForModal(topic); setIsManageFlashcardsModalOpen(true); }}
+                    onUpdateFlashcardSRS={handleUpdateFlashcardSRS}
                 />;
       case 'settings':
         return <SettingsView 
